@@ -1,8 +1,0 @@
-{"level":"info","message":"HTTP request","method":"GET","path":"/api/health","requestId":"69228f5e-8be4-4114-810f-9fbc19f28131","service":"core-api","timestamp":"2026-05-17T18:05:15.137Z"}
-{"level":"info","message":"HTTP request","method":"POST","path":"/api/auth/register","requestId":"5130dbf9-cc7b-4ba0-b7c2-d1386d10d6d6","service":"core-api","timestamp":"2026-05-17T18:05:15.163Z"}
-{"error":"data and salt arguments required","level":"error","message":"Registration error","service":"core-api","timestamp":"2026-05-17T18:05:15.166Z"}
-{"level":"info","message":"HTTP request","method":"POST","path":"/api/auth/login","requestId":"b3678983-13a7-4000-b48f-5725d5d8e597","service":"core-api","timestamp":"2026-05-17T18:05:15.171Z"}
-{"level":"info","message":"HTTP request","method":"GET","path":"/api/auth/me","requestId":"49a7f8af-7284-42e7-a563-d8a3ded943af","service":"core-api","timestamp":"2026-05-17T18:05:15.176Z"}
-{"level":"info","message":"HTTP request","method":"GET","path":"/api/portfolio","requestId":"d751f581-2050-4967-9fb8-d171b2b1dfbc","service":"core-api","timestamp":"2026-05-17T18:05:15.182Z"}
-{"level":"info","message":"HTTP request","method":"GET","path":"/api/watchlist","requestId":"f6334879-dc59-4d1a-944a-fbad4643a0fc","service":"core-api","timestamp":"2026-05-17T18:05:15.188Z"}
-{"level":"info","message":"HTTP request","method":"GET","path":"/api/notifications","requestId":"86f0d2fb-98e7-4362-b3e1-058d1f918e90","service":"core-api","timestamp":"2026-05-17T18:05:15.193Z"}
