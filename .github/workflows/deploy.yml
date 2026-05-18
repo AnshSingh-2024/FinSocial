@@ -76,7 +76,7 @@ jobs:
 
       - name: Install ml-service deps
         working-directory: ml-service
-        run: pip install Flask pandas numpy xgboost scikit-learn joblib pytest
+        run: pip install -r requirements-ci.txt
 
       - name: Run pytest
         working-directory: ml-service
@@ -95,7 +95,7 @@ jobs:
 
       - name: Install gen-ai deps
         working-directory: gen-ai-service
-        run: pip install fastapi uvicorn pydantic httpx pytest requests
+        run: pip install -r requirements-ci.txt
 
       - name: Run pytest
         working-directory: gen-ai-service
