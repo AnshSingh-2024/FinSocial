@@ -179,7 +179,7 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-        run: npx --yes vercel@47.2.2 deploy --prod --yes
+        run: npx --yes vercel@54 deploy --prod --yes
 
   # ─── Deploy API to Render ─────────────────────────────────────────────────────
   deploy-api:
