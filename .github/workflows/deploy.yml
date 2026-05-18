@@ -173,8 +173,8 @@ jobs:
           VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
 
       # Pin modern CLI (API requires 47+). amondnet/vercel-action@v25 bundled Vercel 25.x and broke deploys.
+      # Deploy from repo root: Vercel project "Root Directory" is `client` — running inside `client/` double-resolves to `client/client`.
       - name: Deploy to Vercel
-        working-directory: client
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
@@ -191,7 +191,8 @@ jobs:
     steps:
       - name: Trigger Render deploy
         run: |
-          curl -X POST \
+          curl -sfS -X POST \
             -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            -H "Content-Type: application/json" \
             "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID_API }}/deploys" \
-            -d '{"clearCache": false}'
+            -d '{"clearCache":"do_not_clear"}'
