@@ -8,7 +8,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_PREFIX: ${{ github.repository_owner }}/finsocial
+  # IMAGE_PREFIX set in build-and-push (GHCR image path must be lowercase)
 
 jobs:
   # ─── Test Suite ────────────────────────────────────────────────────────────
@@ -124,6 +124,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set image prefix (GHCR requires lowercase)
+        run: |
+          OWNER_LC=$(echo "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')
+          echo "IMAGE_PREFIX=${OWNER_LC}/finsocial" >> "$GITHUB_ENV"
+
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
@@ -167,14 +172,14 @@ jobs:
         env:
           VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
 
+      # Pin modern CLI (API requires 47+). amondnet/vercel-action@v25 bundled Vercel 25.x and broke deploys.
       - name: Deploy to Vercel
-        uses: amondnet/vercel-action@v25
-        with:
-          vercel-token: ${{ secrets.VERCEL_TOKEN }}
-          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
-          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
-          working-directory: client
-          vercel-args: '--prod'
+        working-directory: client
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: npx --yes vercel@47.2.2 deploy --prod --yes
 
   # ─── Deploy API to Render ─────────────────────────────────────────────────────
   deploy-api:

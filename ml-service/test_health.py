@@ -1,22 +1,25 @@
 """
 Smoke tests for ml-service.
 Run: pytest test_health.py -v
+
+/predict uses live yfinance when DATABASE_URL is unset. If Yahoo returns no rows,
+the API responds with 422 — that is expected in CI or offline and is not mock data.
 """
-import pytest
-import sys
 import os
+
+import pytest
 
 # Prevent actual model loading in tests
 os.environ.setdefault("DATABASE_URL", "")
 
-from app import app
+from app import app  # noqa: E402 — after env
 
 
 @pytest.fixture
 def client():
     app.config["TESTING"] = True
-    with app.test_client() as client:
-        yield client
+    with app.test_client() as c:
+        yield c
 
 
 def test_health_endpoint(client):
@@ -28,6 +31,7 @@ def test_health_endpoint(client):
 
 
 def test_predict_endpoint_accepts_ticker(client):
+    """Live market data via yfinance; 422 if history is unavailable (rate limit, network, symbol)."""
     response = client.post(
         "/predict",
         json={"ticker": "RELIANCE.NS"},
@@ -42,6 +46,7 @@ def test_predict_endpoint_accepts_ticker(client):
         assert 0 <= data["confidence"] <= 100
     else:
         assert "error" in data
+        assert data.get("ticker") == "RELIANCE.NS"
 
 
 def test_sentiment_batch_endpoint(client):
