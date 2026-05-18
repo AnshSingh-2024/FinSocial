@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 
 /** Interactive poll for Tribe chat. */
 export default function TribePollCard({ poll, counts, userVote, disabled, onVote }) {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import apiClient from '../api/client';
 import CandlestickChart from '../components/CandlestickChart';
 import ChartRangeSelector from '../components/ChartRangeSelector';
@@ -8,7 +8,6 @@ const TimeMachine = () => {
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedTicker, setSelectedTicker] = useState('RELIANCE.NS');
   const [history, setHistory] = useState([]);
-  const [stockData, setStockData] = useState(null);
   const [tradeDate, setTradeDate] = useState(null);
   const [tradeSide, setTradeSide] = useState('BUY');
   const [tradeQty, setTradeQty] = useState(10);
@@ -37,7 +36,6 @@ const TimeMachine = () => {
     try {
       const r = await apiClient.get(`/stocks/${encodeURIComponent(selectedTicker)}`, { params: { range: '2y' } });
       setHistoryInterval(r.data.historyInterval || '1d');
-      setStockData(r.data);
       const hist = r.data.history || [];
 
       const filtered = hist.filter((d) => {

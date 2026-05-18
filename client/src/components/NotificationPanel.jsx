@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import apiClient from '../api/client';
 import useStore from '../store';
 
-const NotificationPanel = ({ open, onClose }) => {
+const NotificationPanel = ({ open }) => {
   const [notifications, setNotifications] = useState([]);
   const setUnreadCount = useStore((s) => s.setUnreadCount);
   const decrementUnread = useStore((s) => s.decrementUnread);
@@ -11,17 +11,17 @@ const NotificationPanel = ({ open, onClose }) => {
     if (!open) return;
     apiClient.get('/notifications').then((r) => {
       setNotifications(r.data);
-    }).catch(() => {});
+    }).catch(() => undefined);
   }, [open]);
 
   const markAllRead = async () => {
-    await apiClient.patch('/notifications/read-all').catch(() => {});
+    await apiClient.patch('/notifications/read-all').catch(() => undefined);
     setNotifications((prev) => prev.map((n) => ({ ...n, readAt: new Date().toISOString() })));
     setUnreadCount(0);
   };
 
   const markRead = async (id) => {
-    await apiClient.patch(`/notifications/${id}/read`).catch(() => {});
+    await apiClient.patch(`/notifications/${id}/read`).catch(() => undefined);
     setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, readAt: new Date().toISOString() } : n));
     decrementUnread();
   };

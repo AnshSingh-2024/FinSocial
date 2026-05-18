@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import apiClient from '../api/client';
 import CandlestickChart from '../components/CandlestickChart';
@@ -156,7 +156,9 @@ const Stocks = () => {
     try {
       const r = await apiClient.post(`/stocks/${encodeURIComponent(ticker)}/sentiment`, { vote });
       setSentiment((prev) => ({ ...prev, ...r.data }));
-    } catch {}
+    } catch {
+      /* ignore vote failure */
+    }
   };
 
   const showToast = (msg) => {

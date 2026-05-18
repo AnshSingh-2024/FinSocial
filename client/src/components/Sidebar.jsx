@@ -1,4 +1,3 @@
-import React from 'react';
 import { NavLink } from 'react-router-dom';
 import useStore from '../store';
 import { Home, Users, MessageSquare, Briefcase, TrendingUp, LogOut, Bell, Clock } from 'lucide-react';

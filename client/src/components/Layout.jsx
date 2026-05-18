@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Sidebar from './Sidebar';
 import FinBot from './FinBot';
 import NotificationPanel from './NotificationPanel';

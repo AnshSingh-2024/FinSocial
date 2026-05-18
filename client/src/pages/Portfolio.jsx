@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import apiClient from '../api/client';
 import useStore from '../store';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
@@ -47,7 +47,6 @@ const Portfolio = () => {
 
   const balance = portfolioData?.balance ?? user?.virtualBalance ?? 1000000;
   const totalPnl = portfolioData?.totalPnl ?? 0;
-  const totalValue = portfolioData?.totalValue ?? balance;
   const returnsPct = portfolioData?.totalInvested > 0
     ? ((totalPnl / portfolioData.totalInvested) * 100).toFixed(2)
     : '0.00';

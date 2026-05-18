@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import apiClient from '../api/client';
 import { APP_BASE } from '../constants/routes';
@@ -46,7 +46,9 @@ const Forum = () => {
     try {
       const r = await apiClient.post(`/forum/${id}/vote`, { direction });
       setQuestions((prev) => prev.map((q) => q.id === id ? { ...q, votes: r.data.votes } : q));
-    } catch {}
+    } catch {
+      /* ignore vote failure */
+    }
   };
 
   const timeAgo = (date) => {

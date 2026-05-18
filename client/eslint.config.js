@@ -18,4 +18,17 @@ export default defineConfig([
       parserOptions: { ecmaFeatures: { jsx: true } },
     },
   },
+  {
+    files: ['vite.config.js'],
+    languageOptions: {
+      globals: { ...globals.browser, ...globals.node },
+    },
+  },
+  {
+    files: ['src/pages/**/*.{js,jsx}'],
+    rules: {
+      // Data-fetch effects commonly set loading state at start; flag is noisy for pages.
+      'react-hooks/set-state-in-effect': 'off',
+    },
+  },
 ])

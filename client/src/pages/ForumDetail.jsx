@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import apiClient from '../api/client';
 import useStore from '../store';
@@ -25,7 +25,9 @@ const ForumDetail = () => {
     try {
       const r = await apiClient.post(`/forum/${id}/vote`, { direction });
       setQuestion((prev) => ({ ...prev, votes: r.data.votes }));
-    } catch {}
+    } catch {
+      /* ignore */
+    }
   };
 
   const handleVoteA = async (answerId, direction) => {
@@ -35,7 +37,9 @@ const ForumDetail = () => {
         ...prev,
         answers: prev.answers.map((a) => a.id === answerId ? { ...a, votes: r.data.votes } : a),
       }));
-    } catch {}
+    } catch {
+      /* ignore */
+    }
   };
 
   const handleAccept = async (answerId) => {
@@ -45,7 +49,9 @@ const ForumDetail = () => {
         ...prev,
         answers: prev.answers.map((a) => a.id === answerId ? { ...a, isAccepted: r.data.isAccepted } : { ...a, isAccepted: false }),
       }));
-    } catch {}
+    } catch {
+      /* ignore */
+    }
   };
 
   const handleSubmitAnswer = async (e) => {

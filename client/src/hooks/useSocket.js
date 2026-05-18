@@ -43,20 +43,28 @@ export function disconnectSocket() {
 export function useSocket(eventHandlers = {}) {
   const token = useStore((s) => s.token);
   const handlersRef = useRef(eventHandlers);
-  handlersRef.current = eventHandlers;
+
+  useEffect(() => {
+    handlersRef.current = eventHandlers;
+  }, [eventHandlers]);
 
   useEffect(() => {
     const socket = ensureSocket(token);
     if (!socket) return;
 
-    const entries = Object.entries(handlersRef.current);
-    for (const [event, handler] of entries) {
-      socket.on(event, handler);
+    const listenerFns = {};
+    for (const event of Object.keys(handlersRef.current)) {
+      const listener = (...args) => {
+        const fn = handlersRef.current[event];
+        if (typeof fn === 'function') fn(...args);
+      };
+      listenerFns[event] = listener;
+      socket.on(event, listener);
     }
 
     return () => {
-      for (const [event, handler] of entries) {
-        socket.off(event, handler);
+      for (const [event, listener] of Object.entries(listenerFns)) {
+        socket.off(event, listener);
       }
     };
   }, [token]);

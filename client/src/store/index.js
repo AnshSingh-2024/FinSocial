@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-const useStore = create((set, get) => ({
+const useStore = create((set) => ({
   user: JSON.parse(localStorage.getItem('finsocial_user') || 'null'),
   token: localStorage.getItem('finsocial_token') || null,
   isAuthenticated: !!localStorage.getItem('finsocial_token'),

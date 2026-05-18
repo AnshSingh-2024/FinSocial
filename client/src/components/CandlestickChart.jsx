@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useEffect, useState } from 'react';
+import { useMemo, useRef, useEffect, useState } from 'react';
 
 /** OHLC candles: date (label string), open, high, low, close */
 export default function CandlestickChart({
@@ -99,7 +99,7 @@ export default function CandlestickChart({
     );
   }
 
-  const { pl, pr, pt, pb, innerH, innerW, slot, toY, markIx, xLabelIndices } = layout;
+  const { pl, pt, innerH, innerW, slot, toY, markIx, xLabelIndices } = layout;
   const bw = Math.min(Math.max(slot * 0.72, 2), 16);
   const axisColor = 'var(--text3, #888)';
   const fontPx = Math.min(10, Math.max(8, slot * 0.35));

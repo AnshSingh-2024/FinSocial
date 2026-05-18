@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import apiClient from '../api/client';
 import useStore from '../store';
 import { useSocket } from '../hooks/useSocket';
@@ -59,7 +59,7 @@ const Tribe = () => {
       if (r.data.length > 0) {
         setCurrentChannel((prev) => prev || r.data[0]);
       }
-    }).catch(() => {});
+    }).catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -74,7 +74,7 @@ const Tribe = () => {
         setMessages(r.data);
         setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
       })
-      .catch(() => {});
+      .catch(() => undefined);
 
     const handleMessage = (msg) => {
       if (msg.channelId != null && msg.channelId !== currentChannel.id) return;
@@ -114,7 +114,7 @@ const Tribe = () => {
       socket.off('tribe:poll', onPollPayload);
       socket.off('tribe:poll_update', onPollUpdate);
     };
-  }, [currentChannel?.id, socket, user?.id]);
+  }, [currentChannel, socket, user?.id]);
 
   const mergeAnnouncement = (message) => {
     if (!message?.id) return;

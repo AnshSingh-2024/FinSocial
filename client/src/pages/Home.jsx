@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useStore from '../store';
 import apiClient from '../api/client';
@@ -85,13 +85,12 @@ const Home = () => {
     }
   }, [chartRange, chartBaseHistory, chart1dHistory, chartInterval]);
 
-  // Load leaderboard by period
   useEffect(() => {
     if (leaderboardData[period]) return;
     apiClient.get(`/leaderboard?period=${period}`).then((r) => {
       setLeaderboardData((prev) => ({ ...prev, [period]: r.data }));
-    }).catch(() => {});
-  }, [period]);
+    }).catch(() => undefined);
+  }, [period, leaderboardData]);
 
   const loadNews = async (refresh = false) => {
     setNewsLoading(true);
@@ -137,7 +136,6 @@ const Home = () => {
 
   const balance = portfolioStats?.balance ?? user?.virtualBalance ?? 1000000;
   const totalPnl = portfolioStats?.totalPnl ?? 0;
-  const displayName = user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : 'Guest';
 
   const currentLb = leaderboardData[period] || [];
 
