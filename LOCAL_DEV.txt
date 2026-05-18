@@ -1,0 +1,48 @@
+Local development (no Docker) — minimal flow
+============================================
+
+Prerequisites: PostgreSQL with a database created, Redis optional for Bull queues (omit or use docker compose up -d postgres redis only).
+
+1) Database
+   Export DATABASE_URL, e.g.:
+   postgresql://USER:PASS@localhost:5432/finsocial_db
+
+2) Core API (terminal 1)
+   cd server
+   cp .env.example .env
+   # Fill JWT_SECRET, DATABASE_URL, REDIS_HOST=localhost, GEN_AI_SERVICE_HOST=127.0.0.1, ML_SERVICE_HOST=127.0.0.1
+   npm install
+   npx prisma db push
+   npm run seed
+   npm run dev
+   Server: http://localhost:5000  (routes under /api/...)
+
+3) Gen AI (terminal 2)
+   cd gen-ai-service
+   python3 -m venv .venv && source .venv/bin/activate
+   pip install -r requirements.txt
+   cp .env.example .env
+   # GEMINI_API_KEY=... plus DATABASE_URL if you want pgvector RAG
+   python app.py
+   Or: uvicorn app:app --host 0.0.0.0 --port 5002 --reload
+
+4) ML (terminal 3) — optional for signals / predict
+   cd ml-service
+   python3 -m venv .venv && source .venv/bin/activate
+   pip install -r requirements.txt
+   DATABASE_URL=... python app.py
+
+5) Client (terminal 4)
+   cd client
+   npm install
+   # Point Vite proxy at Express (no nginx). Create .env.local:
+   echo 'VITE_DEV_BACKEND=http://localhost:5000' > .env.local
+   npm run dev
+   Open http://localhost:5173
+
+FinBot path: Browser → Vite proxy /api → must hit your backend; backend POSTs http://GEN_AI_SERVICE_HOST:5002/chat.
+So set GEN_AI_SERVICE_HOST=127.0.0.1 (and GEMINI_API_KEY in gen-ai .env).
+
+Quick prod-like stack with only DB in Docker:
+   docker compose up -d postgres redis
+   Then run steps 2–5 with DATABASE_URL pointing at localhost:5432 mapped port if you expose it.

@@ -1,0 +1,116 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: finsocial_postgres
+    environment:
+      POSTGRES_USER: finsocial
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-finsocial_dev}
+      POSTGRES_DB: finsocial_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U finsocial -d finsocial_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    container_name: finsocial_redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  core-api:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: finsocial_core_api
+    env_file:
+      - ./server/.env
+    environment:
+      DATABASE_URL: postgresql://finsocial:${POSTGRES_PASSWORD:-finsocial_dev}@postgres:5432/finsocial_db
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      ML_SERVICE_HOST: ml-service
+      ML_SERVICE_PORT: 5001
+      GEN_AI_SERVICE_HOST: gen-ai-service
+      GEN_AI_SERVICE_PORT: 5002
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ml-service:
+        condition: service_healthy
+      gen-ai-service:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  ml-service:
+    build:
+      context: ./ml-service
+      dockerfile: Dockerfile
+    container_name: finsocial_ml
+    env_file:
+      - ./ml-service/.env
+    environment:
+      DATABASE_URL: postgresql://finsocial:${POSTGRES_PASSWORD:-finsocial_dev}@postgres:5432/finsocial_db
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  gen-ai-service:
+    build:
+      context: ./gen-ai-service
+      dockerfile: Dockerfile
+    container_name: finsocial_genai
+    env_file:
+      - ./gen-ai-service/.env
+    environment:
+      DATABASE_URL: postgresql://finsocial:${POSTGRES_PASSWORD:-finsocial_dev}@postgres:5432/finsocial_db
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5002/health"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 30s
+
+  nginx:
+    build:
+      context: .
+      dockerfile: nginx/Dockerfile
+    container_name: finsocial_nginx
+    ports:
+      - "9999:80"
+    depends_on:
+      core-api:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

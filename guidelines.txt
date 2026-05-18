@@ -1,0 +1,94 @@
+Community Driven Brokerage
+Platform
+FinTech / Community Platform / Full Stack Engineering
+
+TRACK FinTech / Community Platform / Full Stack Engineering TEAM SIZE 4 Members
+
+Background
+Retail investors do not trade in isolation — they follow trends, ask questions, and take cues from
+peers. Yet every brokerage app treats users as individuals in silos. The opportunity is a
+community-first layer on top of a brokerage platform — where collective intelligence becomes a
+feature, not a side effect.
+
+Problem Statement
+Build a community-driven simulated brokerage platform available for web and mobile. The
+platform should let users connect with fellow investors — from complete beginners to
+experienced traders — discover what peers are trading, exchange signals and insights, get help
+with platform and investing basics, and participate in community-driven discussions. The goal is
+to make investing less intimidating and more social, turning collective knowledge into a financial
+edge for everyone.
+
+
+SCENARIO
+A first-time investor signs up with no idea where to begin. They head to the Beginner's
+Lounge Tribe Room and ask "How do I read a candlestick chart?" — an experienced
+trader replies within minutes. Feeling confident, they browse the Community Feed,
+check the Signal Board, and place their first virtual trade. All in one place, on any
+device.
+
+Objectives
+— Welcome beginners with a community that helps them learn and get started
+— Show anonymized peer trading activity and community trends
+— Surface crowd-sourced and algorithm-assisted BUY / SELL signals
+— Enable community Q&A on investing basics, platform help, and stock discussions
+— Provide topic-based discussion rooms for focused conversations
+— Track community sentiment per stock or sector
+— Support a simulated brokerage experience with historical price replay
+— Implement secure JWT-based authentication and responsive design
+
+What to Build
+Community Feed
+A real-time-style feed showing anonymized peer activity — what stocks are being bought or sold
+across the platform, trending tickers, and notable portfolio moves. Users can react, comment, or
+follow a trend directly from the feed.
+
+Signal Board
+BUY and SELL signals surfaced from community consensus (upvoted signals) and simple
+algorithmic indicators on historical OHLCV data. Each signal shows the stock, type, confidence
+level, and plain-English reasoning.
+
+
+Tribe Rooms
+Topic-based community discussion rooms:
+· Beginner's Lounge — ask any question, no matter how basic
+· IPO Watch — discuss upcoming IPOs
+· Sector Spotlight — IT, Pharma, Banking and beyond
+· Platform Help — understand features and navigate portfolios
+· Mutual Funds Corner — SIPs, index funds, and long-term investing
+
+Q&A Forum
+A structured peer Q&A board where users post investment-related questions and receive
+community responses ranked by helpfulness — Stack Overflow for investors.
+
+Sentiment Meter
+A per-stock community sentiment indicator — Bullish / Neutral / Bearish — derived from
+aggregated signals, reactions, and discussion tone.
+
+Virtual Portfolio & Brokerage Simulation
+Users place virtual BUY and SELL trades driven by historical price replay. Buy price is taken from
+the historical dataset; P&L = (latest price − buy price) × quantity.
+
+
+Feature Expectations
+Must-Have
+— User registration and JWT-based secure login
+— Community feed showing anonymised peer trading activity and trending stocks
+— Signal Board with BUY / SELL signals, confidence level, and reasoning
+— At least three Tribe Rooms including Beginner's Lounge and Platform Help
+— Q&A forum with upvote and reply functionality
+— Virtual portfolio with buy, sell, and P&L tracking
+— Fully responsive UI for desktop and mobile
+
+Good to Have (optional)
+— Leaderboard showing top-performing virtual portfolios
+— AI-assisted reply suggestions in Q&A using financial context
+— Push-style notifications for signals and Q&A responses
+— Verified experienced trader badges for community-recognised mentors
+
+Dataset Guidance
+Use publicly available historical OHLCV stock data. Suggested sources: NSE/BSE historical
+exports, Kaggle, Yahoo Finance, or AI-generated datasets.
+— 20+ stocks with at least 2 years of daily closing price data
+— Powers both the Signal Board and Virtual Portfolio replay
+— Seed: 5–8 dummy accounts with pre-populated trades and posts
+— Seed: Tribe Rooms with starter discussions and beginner questions

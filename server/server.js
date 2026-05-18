@@ -1,0 +1,27 @@
+require('dotenv').config();
+const { loadEnv } = require('./src/utils/env');
+loadEnv();
+
+const app = require('./src/app');
+const http = require('http');
+const setupSocket = require('./src/socket');
+
+const { setupJobs } = require('./src/jobs/index');
+const { startWorkers } = require('./src/jobs/workers');
+
+const PORT = process.env.PORT || 5000;
+
+const server = http.createServer(app);
+const io = setupSocket(server);
+
+// Expose io globally so controllers and workers can emit events
+global.io = io;
+
+// Initialize background jobs
+setupJobs();
+startWorkers();
+
+const logger = require('./src/utils/logger');
+server.listen(PORT, () => {
+  logger.info(`Core API Server running on port ${PORT}`, { env: process.env.NODE_ENV });
+});

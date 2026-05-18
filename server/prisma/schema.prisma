@@ -1,0 +1,309 @@
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector]
+}
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+model User {
+  id                String             @id @default(uuid())
+  username          String             @unique
+  email             String             @unique
+  passwordHash      String
+  firstName         String
+  lastName          String
+  avatarUrl         String?
+  bio               String?
+  mentorBio         String?
+  experienceLevel   String             @default("beginner") // beginner | intermediate | advanced
+  virtualBalance    Float              @default(1000000) // ₹10L starting balance
+  isVerified        Boolean            @default(false)
+  verifiedReason    String?
+  notificationToken String?
+  lastSeenAt        DateTime?
+  createdAt         DateTime           @default(now())
+
+  trades          Trade[]
+  holdings        PortfolioHolding[]
+  forumQuestions  ForumQuestion[]
+  forumAnswers    ForumAnswer[]
+  chatMessages    ChatMessage[]
+  sentimentVotes  SentimentVote[]
+  forumVotes      ForumVote[]
+  notifications   Notification[]
+  watchlist       WatchlistItem[]
+  following       Follow[]           @relation("Follower")
+  followers       Follow[]           @relation("Following")
+  feedEvents      FeedEvent[]
+  leaderboardSnaps LeaderboardSnapshot[]
+}
+
+model Stock {
+  id            String             @id @default(uuid())
+  ticker        String             @unique
+  displayTicker String
+  name          String
+  sector        String
+  industry      String?
+  price         Float
+  change        Float
+  changePct     Float
+  mcap          Float?
+  pe            Float?
+  high52        Float?
+  low52         Float?
+  volume        Float?
+  lastUpdated   DateTime           @default(now())
+
+  history        StockHistory[]
+  trades         Trade[]
+  holdings       PortfolioHolding[]
+  sentimentVotes SentimentVote[]
+  signals        Signal[]
+  watchlistItems WatchlistItem[]
+}
+
+model StockHistory {
+  id      String   @id @default(uuid())
+  stockId String
+  stock   Stock    @relation(fields: [stockId], references: [id])
+  date    DateTime
+  open    Float
+  high    Float
+  low     Float
+  close   Float
+  volume  Float
+
+  @@unique([stockId, date])
+  @@index([stockId, date])
+}
+
+model Trade {
+  id             String   @id @default(uuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id])
+  stockId        String
+  stock          Stock    @relation(fields: [stockId], references: [id])
+  side           String // BUY | SELL
+  quantity       Int
+  executionPrice Float
+  totalValue     Float
+  reason         String?
+  parentTradeId  String?  // for copy-trading provenance
+  timestamp      DateTime @default(now())
+
+  @@index([userId, timestamp])
+}
+
+model PortfolioHolding {
+  id            String @id @default(uuid())
+  userId        String
+  user          User   @relation(fields: [userId], references: [id])
+  stockId       String
+  stock         Stock  @relation(fields: [stockId], references: [id])
+  totalQuantity Int
+  averageCost   Float
+
+  @@unique([userId, stockId])
+}
+
+model SentimentVote {
+  id      String   @id @default(uuid())
+  userId  String
+  user    User     @relation(fields: [userId], references: [id])
+  stockId String
+  stock   Stock    @relation(fields: [stockId], references: [id])
+  vote    String // bullish | neutral | bearish
+  date    DateTime @default(now())
+
+  @@unique([userId, stockId])
+  @@index([stockId])
+}
+
+model Signal {
+  id         String   @id @default(uuid())
+  stockId    String
+  stock      Stock    @relation(fields: [stockId], references: [id])
+  verdict    String   // BUY | SELL | HOLD
+  confidence Int      // 0-100
+  reasoning  String
+  rsi        Float?
+  macd       Float?
+  source     String   @default("ml") // ml | community
+  createdAt  DateTime @default(now())
+
+  @@index([stockId, createdAt])
+}
+
+model ForumQuestion {
+  id        String        @id @default(uuid())
+  userId    String
+  user      User          @relation(fields: [userId], references: [id])
+  title     String
+  body      String
+  tags      String[]
+  votes     Int           @default(0)
+  views     Int           @default(0)
+  createdAt DateTime      @default(now())
+  answers   ForumAnswer[]
+
+  @@index([createdAt])
+}
+
+model ForumAnswer {
+  id         String        @id @default(uuid())
+  questionId String
+  question   ForumQuestion @relation(fields: [questionId], references: [id])
+  userId     String
+  user       User          @relation(fields: [userId], references: [id])
+  body       String
+  votes      Int           @default(0)
+  isAccepted Boolean       @default(false)
+  createdAt  DateTime      @default(now())
+}
+
+model ForumVote {
+  id         String @id @default(uuid())
+  userId     String
+  user       User   @relation(fields: [userId], references: [id])
+  targetType String // question | answer
+  targetId   String
+  direction  Int // -1 or 1
+
+  @@unique([userId, targetType, targetId])
+}
+
+model TribeChannel {
+  id          String        @id @default(uuid())
+  name        String        @unique
+  slug        String        @unique
+  type        String        @default("text")
+  description String?
+  createdAt   DateTime      @default(now())
+  messages    ChatMessage[]
+  polls       TribePoll[]
+}
+
+model ChatMessage {
+  id        String       @id @default(uuid())
+  channelId String
+  channel   TribeChannel @relation(fields: [channelId], references: [id])
+  userId    String
+  user      User         @relation(fields: [userId], references: [id])
+  content   String
+  isBot     Boolean      @default(false)
+  timestamp DateTime     @default(now())
+  pollId    String?
+  poll      TribePoll?   @relation(fields: [pollId], references: [id], onDelete: SetNull)
+
+  @@index([channelId, timestamp])
+}
+
+model TribePoll {
+  id        String       @id @default(uuid())
+  channelId String
+  channel   TribeChannel @relation(fields: [channelId], references: [id])
+  question  String
+  options   String[]
+  votes     Json         @default("{}")
+  createdBy String
+  createdAt DateTime     @default(now())
+  endsAt    DateTime?
+  messages  ChatMessage[]
+}
+
+model Document {
+  id        String                      @id @default(uuid())
+  content   String
+  source    String // "news", "forum", "stock_desc"
+  sourceId  String?
+  ticker    String?
+  tickerTag String[]
+  embedding Unsupported("vector(384)")?
+  createdAt DateTime                    @default(now())
+}
+
+model FeedEvent {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  type      String   // trade | signal | forum_post | news
+  refId     String?
+  payload   Json
+  isPublic  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+model Notification {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  type      String
+  title     String
+  body      String
+  payload   Json?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, readAt])
+}
+
+model Follow {
+  id          String   @id @default(uuid())
+  followerId  String
+  follower    User     @relation("Follower", fields: [followerId], references: [id])
+  followingId String
+  following   User     @relation("Following", fields: [followingId], references: [id])
+  createdAt   DateTime @default(now())
+
+  @@unique([followerId, followingId])
+}
+
+model WatchlistItem {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  stockId   String
+  stock     Stock    @relation(fields: [stockId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@unique([userId, stockId])
+}
+
+model NewsArticle {
+  id          String   @id @default(uuid())
+  url         String   @unique
+  title       String
+  description String?
+  content     String?
+  summary     String?
+  source      String
+  tickers     String[]
+  sentiment   String?  // bullish | neutral | bearish
+  sentScore   Float?
+  publishedAt DateTime
+  createdAt   DateTime @default(now())
+
+  @@index([publishedAt])
+}
+
+model LeaderboardSnapshot {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  period     String   // weekly | monthly | alltime
+  rank       Int
+  returnsPct Float
+  tradeCount Int
+  winRate    Float
+  portfolioValue Float
+  computedAt DateTime @default(now())
+
+  @@index([period, rank])
+}
