@@ -6,14 +6,9 @@ The **landing page** uses a scroll-driven product tour (Hub → Flow → Tools �
 
 ## Live demo
 
-| Service | URL |
-|---------|-----|
-| **Web app (Vercel)** | https://fin-social-eight.vercel.app |
-| **Core API (Render)** | https://finsocial-core-api-latest.onrender.com |
 
-**Demo login:** `vikram@demo.com` / `Demo@1234`
+**Web app (Vercel)** | https://fin-social-eight.vercel.app
 
-On Vercel, set `VITE_BACKEND_URL` to the Render API origin so Socket.IO (Tribe, live updates) works — HTTP `/api` is rewritten via `client/vercel.json`.
 
 ## Stack
 
