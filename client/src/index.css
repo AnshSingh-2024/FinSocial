@@ -388,7 +388,18 @@ table.data-table{width:100%;border-collapse:collapse;font-size:.85rem}
 .chatbot-body { flex: 1; padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; background: var(--bg); }
 .chatbot-msg { max-width: 85%; padding: 10px 14px; border-radius: 12px; font-size: 0.88rem; line-height: 1.4; animation: slideIn 0.2s ease; }
 .chatbot-msg.bot { background: var(--bg2); border: 1px solid var(--border); border-bottom-left-radius: 2px; align-self: flex-start; }
-.chatbot-msg.user { background: var(--blue); color: white; border-bottom-right-radius: 2px; align-self: flex-end; }
+.chatbot-msg.user { background: var(--blue); color: white; border-bottom-right-radius: 2px; align-self: flex-end; white-space: pre-wrap; }
+.chatbot-markdown { line-height: 1.5; word-break: break-word; }
+.chatbot-markdown p { margin: 0 0 0.55em; }
+.chatbot-markdown p:last-child { margin-bottom: 0; }
+.chatbot-markdown ul, .chatbot-markdown ol { margin: 0.35em 0 0.55em; padding-left: 1.15em; }
+.chatbot-markdown li { margin-bottom: 0.3em; }
+.chatbot-markdown li:last-child { margin-bottom: 0; }
+.chatbot-markdown strong { font-weight: 600; color: var(--text); }
+.chatbot-markdown em { font-style: italic; color: var(--text2); }
+.chatbot-markdown h1, .chatbot-markdown h2, .chatbot-markdown h3 {
+  font-size: 0.92rem; font-weight: 600; margin: 0.5em 0 0.35em;
+}
 .chatbot-input { padding: 12px; border-top: 1px solid var(--border); display: flex; gap: 8px; background: var(--bg); border-radius: 0 0 var(--radius) var(--radius); }
 .chatbot-input input { flex: 1; border: 1px solid var(--border); background: var(--bg2); color: var(--text); border-radius: 20px; padding: 8px 16px; font-size: 0.88rem; outline: none; transition: border 0.15s; }
 .chatbot-input input:focus { border-color: var(--blue); }

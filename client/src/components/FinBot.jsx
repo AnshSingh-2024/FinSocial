@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Sparkles, X } from 'lucide-react';
 import apiClient from '../api/client';
+import FinBotMessage from './FinBotMessage';
 
 const FinBot = () => {
   const [open, setOpen] = useState(false);
@@ -73,9 +74,7 @@ const FinBot = () => {
 
         <div className="chatbot-body">
           {messages.map((m, i) => (
-            <div key={i} className={`chatbot-msg ${m.role === 'bot' ? 'bot' : 'user'}`}>
-              {m.content}
-            </div>
+            <FinBotMessage key={i} role={m.role} content={m.content} />
           ))}
           {loading && <div className="chatbot-msg bot" style={{ opacity: 0.6 }}>FinBot is thinking...</div>}
           <div ref={endRef} />

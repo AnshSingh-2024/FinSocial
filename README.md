@@ -149,7 +149,7 @@ Check `/health` → `model_version: 2`, `model_loaded: true`. `/predict` → `mo
 1. Create 3 Web Services on Render pointing to this repo
 2. Set build/start commands:
    - **core-api**: `cd server && npm install && npx prisma generate` / `cd server && sh entrypoint.sh`
-   - **ml-service**: `cd ml-service && pip install -r requirements.txt` / `cd ml-service && python app.py`
+   - **ml-service**: Docker uses slim `requirements-render.txt` (no FinBERT — fits 512MB Render). Local compose: `INSTALL_NLP=true` for FinBERT. Upgrade Render plan to **≥1GB** if you need FinBERT in production.
    - **gen-ai-service**: `cd gen-ai-service && pip install -r requirements.txt` / `cd gen-ai-service && python app.py`
 3. Set required environment variables (see `.env.example` files)
 4. Add Render Postgres and Redis add-ons

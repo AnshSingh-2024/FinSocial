@@ -50,6 +50,8 @@ _finbert_load_attempted = False
 
 def get_finbert():
     global finbert_pipeline, _finbert_load_attempted
+    if os.environ.get("DISABLE_FINBERT", "").lower() in ("1", "true", "yes"):
+        return None
     if finbert_pipeline is not None:
         return finbert_pipeline
     if _finbert_load_attempted:
@@ -159,7 +161,8 @@ def health():
         "model_path": MODEL_PATH,
         "model_file_exists": os.path.exists(MODEL_PATH),
         "database_connected": db_engine is not None,
-        "finbert_loaded": finbert_pipeline is not None or not _finbert_load_attempted,
+        "finbert_disabled": os.environ.get("DISABLE_FINBERT", "").lower() in ("1", "true", "yes"),
+        "finbert_loaded": finbert_pipeline is not None,
         "hint": (
             "POST /predict and check model_used:true for live XGBoost signals. "
             "If model_loaded is false, run train_model.py (needs StockHistory in DB) and redeploy ml-service."
