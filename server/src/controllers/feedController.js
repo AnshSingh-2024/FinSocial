@@ -8,6 +8,8 @@ const SIGNAL_STOCK_INCLUDE = {
   stock: { select: { ticker: true, displayTicker: true, name: true, price: true, changePct: true } },
 };
 
+const DASHBOARD_EXCLUDED_TICKERS = new Set(['SUNPHARMA.NS']);
+
 function shuffleInPlace(arr) {
   for (let i = arr.length - 1; i > 0; i -= 1) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -16,8 +18,15 @@ function shuffleInPlace(arr) {
   return arr;
 }
 
-/** Latest signal per stock, then a random subset for the dashboard board. */
-async function fetchLatestSignals(limit = 5) {
+function summarizeSignalPool(pool) {
+  const buy = pool.filter((s) => s.verdict === 'BUY').length;
+  const sell = pool.filter((s) => s.verdict === 'SELL').length;
+  const hold = pool.filter((s) => s.verdict === 'HOLD').length;
+  return { total: pool.length, buy, sell, hold };
+}
+
+/** Latest signal per stock (full universe for stats / board sampling). */
+async function buildLatestSignalPool() {
   const recent = await prisma.signal.findMany({
     include: SIGNAL_STOCK_INCLUDE,
     orderBy: { createdAt: 'desc' },
@@ -31,7 +40,14 @@ async function fetchLatestSignals(limit = 5) {
     }
   }
 
-  const pool = [...latestByStock.values()];
+  return [...latestByStock.values()];
+}
+
+/** Random dashboard board sample (excludes tickers like SUNPHARMA from the strip). */
+async function fetchSignalBoardSample(limit = 5) {
+  const pool = (await buildLatestSignalPool()).filter(
+    (s) => !DASHBOARD_EXCLUDED_TICKERS.has(s.stock?.ticker)
+  );
   shuffleInPlace(pool);
   return pool.slice(0, limit);
 }
@@ -115,9 +131,10 @@ exports.refreshNews = async (req, res) => {
 exports.getSignalsTop = async (req, res) => {
   try {
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 5, 1), 20);
-    const signals = await fetchLatestSignals(limit);
+    const pool = await buildLatestSignalPool();
+    const signals = await fetchSignalBoardSample(limit);
     res.set('Cache-Control', 'no-store');
-    res.json(signals);
+    res.json({ signals, stats: summarizeSignalPool(pool) });
   } catch (error) {
     logger.error('getSignalsTop error', { error: error.message });
     res.status(500).json({ error: 'Failed to fetch signals' });
@@ -127,7 +144,8 @@ exports.getSignalsTop = async (req, res) => {
 exports.refreshSignals = async (req, res) => {
   try {
     const result = await refreshAllSignals();
-    const signals = await fetchLatestSignals(5);
+    const pool = await buildLatestSignalPool();
+    const signals = await fetchSignalBoardSample(5);
 
     let message;
     if (result.updated === 0) {
@@ -138,7 +156,7 @@ exports.refreshSignals = async (req, res) => {
       message = `Generated ${result.updated} new signal(s).`;
     }
 
-    res.json({ ...result, message, signals });
+    res.json({ ...result, message, signals, stats: summarizeSignalPool(pool) });
   } catch (error) {
     logger.error('refreshSignals error', { error: error.message });
     res.status(500).json({ error: 'Failed to refresh signals' });

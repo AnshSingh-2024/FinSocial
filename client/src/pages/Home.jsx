@@ -8,6 +8,13 @@ import ChartRangeSelector from '../components/ChartRangeSelector';
 import NewsFeed from '../components/NewsFeed';
 import { APP_BASE } from '../constants/routes';
 import { historyToChartData } from '../utils/chartHistory';
+import {
+  loadDashboardChartTicker,
+  saveDashboardChartTicker,
+} from '../utils/dashboardChartPreference';
+
+const DASHBOARD_EXCLUDED_TICKERS = new Set(['SUNPHARMA.NS']);
+const FEATURED_STOCK_TICKER = 'RELIANCE.NS';
 
 const Home = () => {
   const navigate = useNavigate();
@@ -32,6 +39,16 @@ const Home = () => {
   const [signalsReady, setSignalsReady] = useState(false);
   const [signalsError, setSignalsError] = useState(null);
   const [signalsRefreshMsg, setSignalsRefreshMsg] = useState(null);
+  const [signalStats, setSignalStats] = useState(null);
+  const [chartStockOptions, setChartStockOptions] = useState([]);
+  const [chartTicker, setChartTicker] = useState(() =>
+    loadDashboardChartTicker(useStore.getState().user?.id, FEATURED_STOCK_TICKER)
+  );
+
+  const handleChartTickerChange = (ticker) => {
+    setChartTicker(ticker);
+    saveDashboardChartTicker(user?.id, ticker);
+  };
 
   const loadSignals = async (refresh = false) => {
     if (refresh) {
@@ -43,8 +60,10 @@ const Home = () => {
       const r = refresh
         ? await apiClient.post('/feed/signals/refresh', {}, { timeout: 120_000 })
         : await apiClient.get('/feed/signals');
-      const list = refresh ? (r.data.signals ?? r.data) : r.data;
+      const payload = r.data;
+      const list = Array.isArray(payload) ? payload : (payload.signals ?? []);
       setSignals(Array.isArray(list) ? list : []);
+      if (payload?.stats) setSignalStats(payload.stats);
       if (refresh) {
         if (r.data.error && r.data.updated === 0) {
           setSignalsError(r.data.error);
@@ -96,13 +115,28 @@ const Home = () => {
     ])
       .then(([stocksRes, portfolioRes, feedRes]) => {
         if (cancelled) return;
-        const raw = stocksRes.data;
-        const list = Array.isArray(raw) ? raw : [];
+        const rawList = Array.isArray(stocksRes.data) ? stocksRes.data : [];
+        const options = rawList.map((s) => ({
+          ticker: s.ticker,
+          label: s.displayTicker || s.ticker.replace(/\.NS$/i, ''),
+        }));
+        setChartStockOptions(options);
+
+        const savedTicker = loadDashboardChartTicker(user?.id, FEATURED_STOCK_TICKER);
+        const resolvedTicker = options.some((o) => o.ticker === savedTicker)
+          ? savedTicker
+          : FEATURED_STOCK_TICKER;
+        setChartTicker(resolvedTicker);
+        if (resolvedTicker !== savedTicker) {
+          saveDashboardChartTicker(user?.id, resolvedTicker);
+        }
+
+        const list = rawList.filter((s) => !DASHBOARD_EXCLUDED_TICKERS.has(s.ticker));
         setTrendingTickers(list.slice(0, 8).map((s) => ({
           tickerDisplay: s.displayTicker || s.ticker,
           tickerFull: s.ticker,
-        price: s.price,
-        chg: `${s.changePct >= 0 ? '+' : ''}${s.changePct?.toFixed(2)}%`,
+          price: s.price,
+          chg: `${s.changePct >= 0 ? '+' : ''}${s.changePct?.toFixed(2)}%`,
           up: s.changePct >= 0,
           id: s.id,
         })));
@@ -112,36 +146,55 @@ const Home = () => {
         setFeedItems(feed.slice(0, 6));
       });
     return () => { cancelled = true; };
-  }, []);
+  }, [user?.id]);
+
+  useEffect(() => {
+    const saved = loadDashboardChartTicker(user?.id, FEATURED_STOCK_TICKER);
+    setChartTicker(saved);
+  }, [user?.id]);
 
   useEffect(() => {
     loadSignals(false);
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
     setChartLoading(true);
     apiClient
-      .get('/stocks/RELIANCE.NS', { params: { range: '2y' } })
+      .get(`/stocks/${encodeURIComponent(chartTicker)}`, { params: { range: '2y' } })
       .then((r) => {
+        if (cancelled) return;
         setChartBaseHistory(r.data.history || []);
         setChartInterval(r.data.historyInterval || '1d');
       })
-      .catch(() => setChartBaseHistory([]))
-      .finally(() => setChartLoading(false));
-  }, []);
+      .catch(() => {
+        if (!cancelled) setChartBaseHistory([]);
+      })
+      .finally(() => {
+        if (!cancelled) setChartLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [chartTicker]);
 
   useEffect(() => {
-    if (chartRange !== '1d') return;
+    if (chartRange !== '1d') return undefined;
+    let cancelled = false;
     setChartLoading(true);
     apiClient
-      .get('/stocks/RELIANCE.NS', { params: { range: '1d' } })
+      .get(`/stocks/${encodeURIComponent(chartTicker)}`, { params: { range: '1d' } })
       .then((r) => {
+        if (cancelled) return;
         setChart1dHistory(r.data.history || []);
         setChartInterval(r.data.historyInterval || 'intraday');
       })
-      .catch(() => setChart1dHistory([]))
-      .finally(() => setChartLoading(false));
-  }, [chartRange]);
+      .catch(() => {
+        if (!cancelled) setChart1dHistory([]);
+      })
+      .finally(() => {
+        if (!cancelled) setChartLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [chartTicker, chartRange]);
 
   useEffect(() => {
     if (chartRange === '1d') {
@@ -191,6 +244,14 @@ const Home = () => {
 
   const currentLb = leaderboardData[period] || [];
 
+  const featuredStock =
+    trendingTickers.find((t) => t.tickerFull === FEATURED_STOCK_TICKER) ||
+    trendingTickers[0];
+
+  const chartLabel =
+    chartStockOptions.find((o) => o.ticker === chartTicker)?.label ||
+    chartTicker.replace(/\.NS$/i, '');
+
   return (
     <div className="page fade-in" id="homePage">
       <h1 className="page-title">Dashboard</h1>
@@ -208,12 +269,21 @@ const Home = () => {
           <div className="stat-label">Total P&L</div>
         </div>
         <div className="card stat-card">
-          <div className="stat-val mono">{trendingTickers[0]?.price ? `₹${trendingTickers[0].price.toFixed(0)}` : '—'}</div>
-          <div className="stat-label">{trendingTickers[0]?.tickerDisplay || 'Top Stock'}</div>
+          <div className="stat-val mono">{featuredStock?.price ? `₹${featuredStock.price.toFixed(0)}` : '—'}</div>
+          <div className="stat-label">{featuredStock?.tickerDisplay || 'RELIANCE'}</div>
         </div>
         <div className="card stat-card">
-          <div className="stat-val">{signals.filter((s) => s.verdict === 'BUY').length} BUY</div>
-          <div className="stat-label">Active Signals</div>
+          <div className="stat-val">
+            {signalStats != null ? `${signalStats.buy} BUY` : '—'}
+          </div>
+          <div className="stat-label">
+            Active Signals
+            {signalStats != null && (
+              <span style={{ display: 'block', fontSize: '0.7rem', fontWeight: 400, marginTop: '2px' }}>
+                {signalStats.total} tracked · {signalStats.sell} SELL · {signalStats.hold} HOLD
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
@@ -238,7 +308,24 @@ const Home = () => {
       <div className="grid-2">
         <div className="card">
           <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '8px' }}>
-            <div className="card-title" style={{ margin: 0 }}>RELIANCE</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+              <div className="card-title" style={{ margin: 0 }}>{chartLabel}</div>
+              <select
+                className="form-input"
+                value={chartTicker}
+                onChange={(e) => handleChartTickerChange(e.target.value)}
+                aria-label="Select stock chart"
+                style={{ width: 'auto', minWidth: '120px', maxWidth: '160px', padding: '6px 10px', fontSize: '0.82rem' }}
+              >
+                {chartStockOptions.length === 0 ? (
+                  <option value={chartTicker}>{chartLabel}</option>
+                ) : (
+                  chartStockOptions.map((o) => (
+                    <option key={o.ticker} value={o.ticker}>{o.label}</option>
+                  ))
+                )}
+              </select>
+            </div>
             <ChartRangeSelector value={chartRange} onChange={setChartRange} />
           </div>
           <div style={{ height: 260 }}>
@@ -247,7 +334,7 @@ const Home = () => {
                 Loading chart...
               </div>
             ) : chartData.length > 0 ? (
-              <CandlestickChart data={chartData} height={260} chartKey={chartRange} />
+              <CandlestickChart data={chartData} height={260} chartKey={`${chartTicker}-${chartRange}`} />
             ) : (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text3)' }}>
                 No chart data for this range
