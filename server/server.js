@@ -8,6 +8,7 @@ const setupSocket = require('./src/socket');
 
 const { setupJobs } = require('./src/jobs/index');
 const { startWorkers } = require('./src/jobs/workers');
+const logger = require('./src/utils/logger');
 
 const PORT = process.env.PORT || 5000;
 
@@ -18,10 +19,9 @@ const io = setupSocket(server);
 global.io = io;
 
 // Initialize background jobs
-setupJobs();
+setupJobs().catch((err) => logger.error('Failed to setup background jobs', { error: err.message }));
 startWorkers();
 
-const logger = require('./src/utils/logger');
 const { ensureTribeChannelsIfNeeded } = require('./src/utils/ensureTribeChannels');
 
 async function start() {

@@ -301,7 +301,7 @@ export default function Landing() {
             <div className="landing-hero-metrics">
               <AnimatedStat value={1000000} prefix="₹" label="Starting paper balance" />
               <AnimatedStat value={560} suffix="+" label="Trading days of history (≈2y)" />
-              <AnimatedStat value={15} suffix=" min" label="Typical signal refresh" />
+              <AnimatedStat value={5} suffix=" min" label="Typical signal refresh" />
               <AnimatedStat value={30} suffix=" min" label="Typical news refresh" />
             </div>
           </div>

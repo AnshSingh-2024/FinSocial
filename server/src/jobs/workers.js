@@ -2,6 +2,7 @@ const { feedQueue, leaderboardQueue, signalQueue, notificationQueue } = require(
 const axios = require('axios');
 const prisma = require('../utils/prisma');
 const logger = require('../utils/logger');
+const { refreshAllSignals } = require('../services/signalRefresher');
 
 const { mlBaseUrl, genAiBaseUrl } = require('../utils/serviceUrls');
 const ML_URL = mlBaseUrl();
@@ -13,69 +14,10 @@ const startWorkers = () => {
   logger.info('Starting background workers...');
 
   // ─── Signal Worker: ML predict → persist Signal → emit ──────────────────────
-  signalQueue.process(async (job) => {
+  signalQueue.process(async () => {
     logger.info('[Worker] Refreshing ML signals...');
     try {
-      const stocks = await prisma.stock.findMany({ select: { id: true, ticker: true } });
-
-      for (const stock of stocks) {
-        try {
-          const { data } = await axios.post(`${ML_URL}/predict`, { ticker: stock.ticker }, { timeout: 10000 });
-
-          const signal = await prisma.signal.create({
-            data: {
-              stockId: stock.id,
-              verdict: data.verdict,
-              confidence: data.confidence,
-              reasoning: data.reasoning || '',
-              rsi: data.technicals?.rsi || null,
-              macd: data.technicals?.macd || null,
-              source: data.model_used ? 'xgboost' : 'heuristic',
-            },
-            include: { stock: { select: { ticker: true, displayTicker: true } } }
-          });
-
-          if (global.io) {
-            global.io.emit('signal:new', {
-              id: signal.id,
-              ticker: signal.stock.displayTicker,
-              verdict: signal.verdict,
-              confidence: signal.confidence,
-              reasoning: signal.reasoning,
-            });
-          }
-
-          // Notify users who have this stock in their watchlist for high-confidence signals
-          if (data.confidence >= 70 && (data.verdict === 'BUY' || data.verdict === 'SELL')) {
-            try {
-              const watchlistUsers = await prisma.watchlistItem.findMany({
-                where: { stockId: stock.id },
-                select: { userId: true },
-              });
-              for (const { userId } of watchlistUsers) {
-                const notification = await prisma.notification.create({
-                  data: {
-                    userId,
-                    type: 'signal_alert',
-                    title: `${data.verdict} Signal: ${signal.stock.displayTicker}`,
-                    body: `ML model signals ${data.verdict} with ${data.confidence}% confidence. ${data.reasoning || ''}`.trim(),
-                  },
-                });
-                notificationQueue.add({ notificationId: notification.id });
-              }
-            } catch (notifErr) {
-              logger.warn('[Worker] Signal notification failed', { error: notifErr.message });
-            }
-          }
-
-          logger.info('[Worker] Signal saved', { ticker: stock.ticker, verdict: data.verdict });
-          await sleep(200);
-        } catch (err) {
-          logger.warn('[Worker] ML predict failed for stock', { ticker: stock.ticker, error: err.message });
-        }
-      }
-
-      return { success: true, count: stocks.length };
+      return await refreshAllSignals();
     } catch (error) {
       logger.error('[Worker] Signal refresh error', { error: error.message });
       throw error;

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, Navigate } from 'react-router-dom';
+import { Link, useNavigate, Navigate } from 'react-router-dom';
 import useStore from '../store';
 import apiClient from '../api/client';
 import { APP_BASE } from '../constants/routes';
@@ -47,13 +47,14 @@ const Auth = () => {
   return (
     <div className="auth-page fade-in" id="authPage">
       <div className="auth-container">
-        <div className="auth-brand">
+        <Link to="/" className="auth-back-link">← Back to home</Link>
+        <Link to="/" className="auth-brand auth-brand-link">
           <svg viewBox="0 0 28 28" fill="none" width="28" height="28">
             <rect width="28" height="28" rx="6" fill="#111"/>
             <path d="M7 20V12l5-4v12M16 20V8l5-4v16" stroke="#fff" strokeWidth="2" strokeLinecap="round"/>
           </svg>
           <span>FinSocial</span>
-        </div>
+        </Link>
         <p className="auth-tagline">Community-driven investing. Collective intelligence as a feature.</p>
         
         <div className="auth-card">

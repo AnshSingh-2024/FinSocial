@@ -281,7 +281,11 @@ table.data-table{width:100%;border-collapse:collapse;font-size:.85rem}
 /* ═══ AUTH PAGE ═══ */
 .auth-page{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#f8f9fa 0%,#e9ecef 100%);padding:24px}
 .auth-container{width:100%;max-width:440px;text-align:center}
+.auth-back-link{display:inline-flex;align-items:center;margin-bottom:16px;font-size:.88rem;color:var(--text2);text-decoration:none;transition:color .15s}
+.auth-back-link:hover{color:var(--blue)}
 .auth-brand{display:flex;align-items:center;justify-content:center;gap:10px;font-weight:800;font-size:1.5rem;margin-bottom:8px}
+.auth-brand-link{text-decoration:none;color:inherit}
+.auth-brand-link:hover{color:var(--blue)}
 .auth-brand svg{width:36px;height:36px}
 .auth-tagline{font-size:.9rem;color:var(--text2);margin-bottom:24px}
 .auth-card{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:28px;text-align:left;box-shadow:0 4px 24px rgba(0,0,0,.06)}

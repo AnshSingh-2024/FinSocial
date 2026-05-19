@@ -7,5 +7,6 @@ router.get('/', optionalAuth, feedController.getFeed);
 router.get('/news', feedController.getNews);
 router.post('/news/refresh', feedController.refreshNews);
 router.get('/signals', feedController.getSignalsTop);
+router.post('/signals/refresh', feedController.refreshSignals);
 
 module.exports = router;

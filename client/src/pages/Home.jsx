@@ -28,6 +28,10 @@ const Home = () => {
   const [newsLoading, setNewsLoading] = useState(false);
   const [newsError, setNewsError] = useState(null);
   const [newsRefreshMsg, setNewsRefreshMsg] = useState(null);
+  const [signalsLoading, setSignalsLoading] = useState(false);
+  const [signalsReady, setSignalsReady] = useState(false);
+  const [signalsError, setSignalsError] = useState(null);
+  const [signalsRefreshMsg, setSignalsRefreshMsg] = useState(null);
   const [dashLoading, setDashLoading] = useState(true);
 
   useEffect(() => {
@@ -37,9 +41,8 @@ const Home = () => {
       apiClient.get('/stocks').catch(() => ({ data: [] })),
       apiClient.get('/portfolio').catch(() => ({ data: null })),
       apiClient.get('/feed').catch(() => ({ data: [] })),
-      apiClient.get('/feed/signals').catch(() => ({ data: [] })),
     ])
-      .then(([stocksRes, portfolioRes, feedRes, signalsRes]) => {
+      .then(([stocksRes, portfolioRes, feedRes]) => {
         if (cancelled) return;
         const raw = stocksRes.data;
         const list = Array.isArray(raw) ? raw : [];
@@ -55,13 +58,15 @@ const Home = () => {
         if (portfolioRes.data) setPortfolioStats(portfolioRes.data);
         const feed = Array.isArray(feedRes.data) ? feedRes.data : [];
         setFeedItems(feed.slice(0, 6));
-        const sig = Array.isArray(signalsRes.data) ? signalsRes.data : [];
-        setSignals(sig.slice(0, 5));
       })
       .finally(() => {
         if (!cancelled) setDashLoading(false);
       });
     return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    loadSignals(false);
   }, []);
 
   useEffect(() => {
@@ -109,6 +114,36 @@ const Home = () => {
         setLeaderboardData((prev) => ({ ...prev, [period]: [] }));
       });
   }, [period, leaderboardData]);
+
+  const loadSignals = async (refresh = false) => {
+    if (refresh) {
+      setSignalsLoading(true);
+      setSignalsError(null);
+      setSignalsRefreshMsg(null);
+    }
+    try {
+      const r = refresh
+        ? await apiClient.post('/feed/signals/refresh', {}, { timeout: 120_000 })
+        : await apiClient.get('/feed/signals');
+      const list = refresh ? (r.data.signals ?? r.data) : r.data;
+      const sig = Array.isArray(list) ? list : [];
+      setSignals(sig.slice(0, 5));
+      if (refresh) {
+        if (r.data.error && r.data.updated === 0) {
+          setSignalsError(r.data.error);
+        } else if (r.data.message) {
+          setSignalsRefreshMsg(r.data.message);
+        }
+      }
+    } catch (err) {
+      if (refresh) {
+        setSignalsError(err.response?.data?.error || err.message || 'Could not generate signals');
+      }
+    } finally {
+      setSignalsReady(true);
+      if (refresh) setSignalsLoading(false);
+    }
+  };
 
   const loadNews = async (refresh = false) => {
     setNewsLoading(true);
@@ -229,7 +264,28 @@ const Home = () => {
 
         {/* Signal Board */}
         <div className="ai-card" style={{ marginTop: 0 }}>
-          <div className="card-title" style={{ marginTop: '8px' }}>Signal board</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '8px', marginTop: '8px', marginBottom: '8px' }}>
+            <div className="card-title" style={{ margin: 0 }}>Signal board</div>
+            <button
+              type="button"
+              className="lb-tab"
+              onClick={() => loadSignals(true)}
+              disabled={signalsLoading}
+            >
+              {signalsLoading ? 'Generating…' : 'Generate signals'}
+            </button>
+          </div>
+          <span style={{ fontSize: '0.75rem', color: 'var(--text3)', display: 'block', marginBottom: '10px' }}>
+            Auto-refresh every 5 minutes
+          </span>
+          {signalsError && (
+            <div className="news-feed-error" style={{ marginBottom: '8px' }}>{signalsError}</div>
+          )}
+          {!signalsError && signalsRefreshMsg && (
+            <div style={{ padding: '8px 12px', marginBottom: '8px', fontSize: '0.82rem', color: 'var(--text2)', background: 'var(--bg2)', borderRadius: '8px' }}>
+              {signalsRefreshMsg}
+            </div>
+          )}
           {signals.length > 0 ? signals.map((s) => (
             <div key={s.id || s.ticker} style={{ marginBottom: '12px', paddingBottom: '12px', borderBottom: '1px solid var(--border)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
@@ -250,9 +306,9 @@ const Home = () => {
             </div>
           )) : (
             <div style={{ color: 'var(--text3)', fontSize: '0.85rem' }}>
-              {dashLoading
+              {!signalsReady || signalsLoading
                 ? 'Loading signals…'
-                : 'No signals yet. Refreshed about every 15 minutes.'}
+                : 'No signals yet. Tap Generate signals or wait for the next auto-refresh (every 5 minutes).'}
             </div>
           )}
         </div>

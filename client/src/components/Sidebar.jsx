@@ -1,10 +1,12 @@
 import { NavLink } from 'react-router-dom';
 import useStore from '../store';
+import { useLogout } from '../hooks/useLogout';
 import { Home, Users, MessageSquare, Briefcase, TrendingUp, LogOut, Bell, Clock } from 'lucide-react';
 import { APP_BASE } from '../constants/routes';
 
 const Sidebar = ({ onNotifClick, mobileOpen }) => {
-  const { user, logout, unreadCount } = useStore();
+  const { user, unreadCount } = useStore();
+  const handleLogout = useLogout();
 
   const navItems = [
     { to: APP_BASE, icon: <Home size={18} />, label: 'Home' },
@@ -57,7 +59,7 @@ const Sidebar = ({ onNotifClick, mobileOpen }) => {
             </strong>
             <span>{user.experienceLevel === 'advanced' ? 'Verified Trader' : user.experienceLevel === 'intermediate' ? 'Intermediate' : 'Beginner'}</span>
           </div>
-          <button className="logout-btn" onClick={logout} title="Sign out">
+          <button className="logout-btn" onClick={handleLogout} title="Sign out">
             <LogOut size={16} />
           </button>
         </div>

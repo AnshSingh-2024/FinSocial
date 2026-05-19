@@ -1,5 +1,6 @@
 import axios from 'axios';
 import useStore from '../store';
+import { logoutAndGoLanding } from '../hooks/useLogout';
 
 const apiClient = axios.create({
   baseURL: '/api',
@@ -21,7 +22,7 @@ apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      useStore.getState().logout();
+      logoutAndGoLanding();
     }
     return Promise.reject(error);
   }

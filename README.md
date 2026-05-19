@@ -79,7 +79,7 @@ This fetches data via Yahoo Finance for all 25 seeded stocks (~5 minutes).
 
 ### Core Platform
 - **Virtual Portfolio** — ₹10L starting balance, BUY/SELL with real NSE prices
-- **Signal Board** — XGBoost ML predictions with RSI/MACD/BB indicators, refreshed every 15 min
+- **Signal Board** — XGBoost ML predictions with RSI/MACD/BB indicators, auto-refresh every 5 min (manual “Generate signals” on dashboard)
 - **Community Feed** — Real-time anonymized trade activity stream
 - **Sentiment Meter** — Community vote (Bullish/Neutral/Bearish) per stock
 - **Tribe Rooms** — Real-time Discord-style chat with 5 curated channels

@@ -2,6 +2,18 @@ const prisma = require('../utils/prisma');
 const logger = require('../utils/logger');
 const { sanitizeFeedEvent } = require('../utils/feedAnonymize');
 const { fetchAndStoreNews } = require('../services/newsFetcher');
+const { refreshAllSignals } = require('../services/signalRefresher');
+
+async function fetchLatestSignals(limit = 10) {
+  return prisma.signal.findMany({
+    include: {
+      stock: { select: { ticker: true, displayTicker: true, name: true, price: true, changePct: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+    take: limit,
+    distinct: ['stockId'],
+  });
+}
 
 exports.getFeed = async (req, res) => {
   try {
@@ -81,18 +93,31 @@ exports.refreshNews = async (req, res) => {
 
 exports.getSignalsTop = async (req, res) => {
   try {
-    // Get latest signal per stock
-    const signals = await prisma.signal.findMany({
-      include: {
-        stock: { select: { ticker: true, displayTicker: true, name: true, price: true, changePct: true } }
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 10,
-      distinct: ['stockId'],
-    });
+    const signals = await fetchLatestSignals(10);
     res.json(signals);
   } catch (error) {
     logger.error('getSignalsTop error', { error: error.message });
     res.status(500).json({ error: 'Failed to fetch signals' });
+  }
+};
+
+exports.refreshSignals = async (req, res) => {
+  try {
+    const result = await refreshAllSignals();
+    const signals = await fetchLatestSignals(10);
+
+    let message;
+    if (result.updated === 0) {
+      message = 'Could not generate signals. Check that the ML service is running.';
+    } else if (result.failed > 0) {
+      message = `Generated ${result.updated} signal(s); ${result.failed} stock(s) failed.`;
+    } else {
+      message = `Generated ${result.updated} new signal(s).`;
+    }
+
+    res.json({ ...result, message, signals });
+  } catch (error) {
+    logger.error('refreshSignals error', { error: error.message });
+    res.status(500).json({ error: 'Failed to refresh signals' });
   }
 };

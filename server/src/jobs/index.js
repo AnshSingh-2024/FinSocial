@@ -8,9 +8,13 @@ const leaderboardQueue = new Queue('leaderboard-updates', redisUrl);
 const signalQueue = new Queue('signal-updates', redisUrl);
 const notificationQueue = new Queue('notifications', redisUrl);
 
-const setupJobs = () => {
-  // Refresh ML signals every 15 minutes
-  signalQueue.add({}, { repeat: { cron: '*/15 * * * *' } });
+const setupJobs = async () => {
+  // Drop stale repeatables (e.g. old */15 cron) so only the 5-minute schedule runs
+  const repeatable = await signalQueue.getRepeatableJobs();
+  await Promise.all(repeatable.map((j) => signalQueue.removeRepeatableByKey(j.key)));
+
+  // Refresh ML signals every 5 minutes
+  signalQueue.add({}, { repeat: { cron: '*/5 * * * *' } });
 
   // Refresh leaderboard every 1 hour
   leaderboardQueue.add({}, { repeat: { cron: '0 * * * *' } });
