@@ -17,8 +17,11 @@ const RANGE_LOOKBACK_DAYS = {
   '2y': 760,
 };
 
+const IST = 'Asia/Kolkata';
+
 function dayKey(d) {
-  return new Date(d.date || d).toISOString().slice(0, 10);
+  const date = new Date(d.date || d);
+  return date.toLocaleDateString('en-CA', { timeZone: IST });
 }
 
 /** Trim history to the selected range (daily bars by count; intraday unchanged). */
@@ -29,7 +32,7 @@ export function applyChartRange(history = [], range = '2y', interval = '1d') {
   return history.slice(-limit);
 }
 
-/** Slice daily/intraday rows ending at endDate (inclusive) — Time Machine. */
+/** Slice daily/intraday rows ending at endDate (inclusive) — Hindsight. */
 export function sliceHistoryForRange(history = [], range = '2y', endDate = null) {
   if (!history.length) return [];
   const lookback = RANGE_LOOKBACK_DAYS[range] ?? RANGE_LOOKBACK_DAYS['2y'];
@@ -65,14 +68,26 @@ export function mapHistoryToChartData(history = [], interval = '1d') {
     .map((d) => {
       const dt = new Date(d.date);
       const date = intraday
-        ? dt.toLocaleString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false })
-        : dt.toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' });
+        ? dt.toLocaleString('en-IN', {
+          timeZone: IST,
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false,
+        })
+        : dt.toLocaleDateString('en-IN', {
+          timeZone: IST,
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+        });
       return {
         date,
+        time: d.time,
         open: d.open,
         close: d.close,
         high: d.high,
         low: d.low,
+        volume: d.volume,
         rawDate: dt,
       };
     });

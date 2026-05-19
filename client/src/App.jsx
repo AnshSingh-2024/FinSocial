@@ -10,7 +10,7 @@ import Portfolio from './pages/Portfolio';
 import Forum from './pages/Forum';
 import ForumDetail from './pages/ForumDetail';
 import Tribe from './pages/Tribe';
-import TimeMachine from './pages/TimeMachine';
+import Hindsight from './pages/Hindsight';
 import apiClient from './api/client';
 import { APP_BASE } from './constants/routes';
 
@@ -62,7 +62,8 @@ function App() {
           <Route path="forum" element={<Forum />} />
           <Route path="forum/:id" element={<ForumDetail />} />
           <Route path="tribe" element={<Tribe />} />
-          <Route path="time-machine" element={<TimeMachine />} />
+          <Route path="hindsight" element={<Hindsight />} />
+          <Route path="time-machine" element={<Navigate to="hindsight" replace />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

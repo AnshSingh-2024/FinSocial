@@ -14,7 +14,7 @@ const Sidebar = ({ onNotifClick, mobileOpen }) => {
     { to: `${APP_BASE}/forum`, icon: <MessageSquare size={18} />, label: 'Q&A Forum' },
     { to: `${APP_BASE}/portfolio`, icon: <Briefcase size={18} />, label: 'Portfolio' },
     { to: `${APP_BASE}/stocks`, icon: <TrendingUp size={18} />, label: 'Stocks' },
-    { to: `${APP_BASE}/time-machine`, icon: <Clock size={18} />, label: 'Time Machine' },
+    { to: `${APP_BASE}/hindsight`, icon: <Clock size={18} />, label: 'Hindsight' },
   ];
 
   return (

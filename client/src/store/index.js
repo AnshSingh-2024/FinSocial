@@ -27,6 +27,16 @@ const useStore = create((set) => ({
     localStorage.removeItem('finsocial_token');
     set({ user: null, token: null, isAuthenticated: false, unreadCount: 0 });
   },
+
+  finbotOpen: false,
+  finbotPendingMessage: null,
+  setFinbotOpen: (open) => set({ finbotOpen: open }),
+  clearFinbotPending: () => set({ finbotPendingMessage: null }),
+  askFinBot: (message) => {
+    const trimmed = typeof message === 'string' ? message.trim() : '';
+    if (!trimmed) return;
+    set({ finbotOpen: true, finbotPendingMessage: trimmed });
+  },
 }));
 
 export default useStore;

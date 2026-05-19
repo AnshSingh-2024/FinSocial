@@ -1,8 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import apiClient from '../api/client';
-import CandlestickChart from '../components/CandlestickChart';
+import MarketChart from '../components/MarketChart';
 import ChartRangeSelector from '../components/ChartRangeSelector';
+import ChartTypeSelector from '../components/ChartTypeSelector';
+import useChartLivePoll from '../hooks/useChartLivePoll';
+import { DEFAULT_CHART_TYPE } from '../constants/chartTypes';
 import { historyToChartData } from '../utils/chartHistory';
 
 const TradeModal = ({ stock, onClose, onTraded }) => {
@@ -87,6 +90,8 @@ const Stocks = () => {
   const [chartRange, setChartRange] = useState('2y');
   const [chartLoading, setChartLoading] = useState(false);
   const [intradayBars, setIntradayBars] = useState(null);
+  const [chartType, setChartType] = useState(DEFAULT_CHART_TYPE);
+  const [showVolume, setShowVolume] = useState(true);
 
   useEffect(() => {
     // Load stocks
@@ -127,18 +132,44 @@ const Stocks = () => {
     });
   }, [ticker]);
 
+  const fetchIntraday = useCallback((t, silent = false) => {
+    if (!silent) setChartLoading(true);
+    return apiClient
+      .get(`/stocks/${encodeURIComponent(t)}`, { params: { range: '1d' } })
+      .then((r) => setIntradayBars({ history: r.data.history || [], interval: r.data.historyInterval || 'intraday' }))
+      .catch(() => setIntradayBars(null))
+      .finally(() => {
+        if (!silent) setChartLoading(false);
+      });
+  }, []);
+
+  const refreshStockDetail = useCallback((silent = false) => {
+    if (!ticker) return Promise.resolve();
+    if (!silent) setChartLoading(true);
+    return apiClient
+      .get(`/stocks/${encodeURIComponent(ticker)}`, { params: { range: '2y' } })
+      .then((r) => setSelectedStock(r.data))
+      .catch(() => {})
+      .finally(() => {
+        if (!silent) setChartLoading(false);
+      });
+  }, [ticker]);
+
   useEffect(() => {
     if (!ticker || chartRange !== '1d') {
       setIntradayBars(null);
       return;
     }
-    setChartLoading(true);
-    apiClient
-      .get(`/stocks/${encodeURIComponent(ticker)}`, { params: { range: '1d' } })
-      .then((r) => setIntradayBars({ history: r.data.history || [], interval: r.data.historyInterval || 'intraday' }))
-      .catch(() => setIntradayBars(null))
-      .finally(() => setChartLoading(false));
-  }, [ticker, chartRange]);
+    fetchIntraday(ticker);
+  }, [ticker, chartRange, fetchIntraday]);
+
+  const pollLiveChart = useCallback(() => {
+    if (!ticker) return;
+    if (chartRange === '1d') fetchIntraday(ticker, true);
+    refreshStockDetail(true);
+  }, [ticker, chartRange, fetchIntraday, refreshStockDetail]);
+
+  useChartLivePoll({ enabled: Boolean(ticker) && chartRange === '1d', onPoll: pollLiveChart });
 
   const toggleWatchlist = async (t, stockId, e) => {
     e.stopPropagation();
@@ -207,13 +238,27 @@ const Stocks = () => {
           </div>
 
           <ChartRangeSelector value={chartRange} onChange={setChartRange} className="chart-range-bar" />
+          <ChartTypeSelector
+            value={chartType}
+            onChange={setChartType}
+            showVolume={showVolume}
+            onVolumeToggle={setShowVolume}
+            className="chart-range-bar"
+          />
           <div className="stock-chart-panel" style={{ height: 280 }}>
             {chartLoading ? (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text3)' }}>
                 Updating chart...
               </div>
             ) : chartData.length > 0 ? (
-              <CandlestickChart data={chartData} height={280} chartKey={`${chartRange}-${chartData.length}`} />
+              <MarketChart
+                data={chartData}
+                height={280}
+                chartType={chartType}
+                showVolume={showVolume}
+                interval={interval === 'intraday' ? 'intraday' : '1d'}
+                chartKey={`${chartRange}-${chartData.length}-${chartType}`}
+              />
             ) : (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text3)', textAlign: 'center', padding: '0 12px' }}>
                 No chart rows in the database for this ticker yet. From the project root run:{' '}

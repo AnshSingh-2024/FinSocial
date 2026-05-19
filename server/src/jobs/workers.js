@@ -8,6 +8,9 @@ const { mlBaseUrl, genAiBaseUrl } = require('../utils/serviceUrls');
 const ML_URL = mlBaseUrl();
 const GEN_AI_URL = genAiBaseUrl();
 const { fetchAndStoreNews } = require('../services/newsFetcher');
+const { refreshQuotesBatch } = require('../services/quoteService');
+const { getApiKey, fetchDailySeries } = require('../providers/alphavantage');
+const { upsertDailyHistory } = require('../utils/stockHistoryUpsert');
 const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
 
 const startWorkers = () => {
@@ -105,6 +108,15 @@ const startWorkers = () => {
       return await processDailyPick();
     }
 
+    if (jobType === 'refresh_quotes') {
+      logger.info('[Worker] Refreshing stock quotes (batch)...');
+      return refreshQuotesBatch(3);
+    }
+
+    if (jobType === 'refresh_daily_history') {
+      return processDailyHistoryRefresh(job.data?.ticker);
+    }
+
     if (jobType !== 'fetch_news') {
       logger.warn('[Worker] Unknown feed job type', { type: jobType });
       return;
@@ -167,6 +179,34 @@ const startWorkers = () => {
     }
   });
 };
+
+let dailyHistoryIndex = 0;
+
+async function processDailyHistoryRefresh(forcedTicker) {
+  if (!getApiKey()) {
+    return { skipped: true, reason: 'no_alphavantage_key' };
+  }
+
+  const stocks = await prisma.stock.findMany({
+    orderBy: { ticker: 'asc' },
+    select: { id: true, ticker: true },
+  });
+  if (!stocks.length) return { success: false, reason: 'no_stocks' };
+
+  const stock = forcedTicker
+    ? stocks.find((s) => s.ticker === forcedTicker) || stocks[0]
+    : stocks[dailyHistoryIndex % stocks.length];
+  dailyHistoryIndex = (dailyHistoryIndex + 1) % stocks.length;
+
+  const bars = await fetchDailySeries(stock.ticker, 'compact');
+  if (!bars?.length) {
+    return { success: false, ticker: stock.ticker, reason: 'no_data' };
+  }
+
+  const upserted = await upsertDailyHistory(stock.id, bars.slice(-30));
+  logger.info('[Worker] Daily history refreshed', { ticker: stock.ticker, upserted });
+  return { success: true, ticker: stock.ticker, upserted };
+}
 
 async function processDailyPick() {
   logger.info('[Worker] Generating daily AI stock pick...');

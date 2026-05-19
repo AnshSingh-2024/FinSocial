@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import apiClient from '../api/client';
-import CandlestickChart from '../components/CandlestickChart';
+import MarketChart from '../components/MarketChart';
 import ChartRangeSelector from '../components/ChartRangeSelector';
+import ChartTypeSelector from '../components/ChartTypeSelector';
+import { DEFAULT_CHART_TYPE } from '../constants/chartTypes';
 import { historyToChartData, sliceHistoryForRange } from '../utils/chartHistory';
 
-const TimeMachine = () => {
+const Hindsight = () => {
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedTicker, setSelectedTicker] = useState('RELIANCE.NS');
   const [history, setHistory] = useState([]);
@@ -18,6 +20,8 @@ const TimeMachine = () => {
   const [tickers, setTickers] = useState([]);
   const [chartRange, setChartRange] = useState('1y');
   const [historyInterval, setHistoryInterval] = useState('1d');
+  const [chartType, setChartType] = useState(DEFAULT_CHART_TYPE);
+  const [showVolume, setShowVolume] = useState(true);
 
   const maxDate = new Date();
   maxDate.setDate(maxDate.getDate() - 1);
@@ -101,15 +105,15 @@ const TimeMachine = () => {
   return (
     <div className="page fade-in">
       <div style={{ marginBottom: '16px' }}>
-        <h1 className="page-title">⏰ Time Machine</h1>
+        <h1 className="page-title">Hindsight</h1>
         <p style={{ color: 'var(--text2)', fontSize: '0.9rem', marginTop: '4px' }}>
-          Go back in time and replay your investment decisions. See how a virtual trade on any past date would have performed today.
+          Replay a past date and see how a virtual trade would have performed today.
         </p>
       </div>
 
       <div className="grid-2">
         <div className="card" style={{ padding: '20px' }}>
-          <div className="card-title">Configure Time Travel</div>
+          <div className="card-title">Configure scenario</div>
           <div className="form-group">
             <label className="form-label">Stock</label>
             <select className="form-input" value={selectedTicker} onChange={(e) => setSelectedTicker(e.target.value)}>
@@ -123,7 +127,7 @@ const TimeMachine = () => {
             </select>
           </div>
           <div className="form-group">
-            <label className="form-label">Travel to Date</label>
+            <label className="form-label">Pick a past date</label>
             <input
               className="form-input"
               type="date"
@@ -139,13 +143,13 @@ const TimeMachine = () => {
             onClick={loadHistory}
             disabled={!selectedDate || !selectedTicker || loading}
           >
-            {loading ? 'Loading history...' : '🚀 Travel Back in Time'}
+            {loading ? 'Loading history...' : 'Load historical view'}
           </button>
         </div>
 
         {tradeDate && (
           <div className="card" style={{ padding: '20px' }}>
-            <div className="card-title">Place Historical Trade</div>
+            <div className="card-title">Place historical trade</div>
             <div style={{ marginBottom: '12px', padding: '12px', background: 'var(--blue-bg)', borderRadius: 'var(--radius)', fontSize: '0.85rem' }}>
               <div><strong>Price on {selectedDate}:</strong> <span className="mono">₹{tradePrice?.toFixed(2)}</span></div>
               <div><strong>Today's Price:</strong> <span className="mono">₹{currentPrice?.toFixed(2)}</span></div>
@@ -163,16 +167,15 @@ const TimeMachine = () => {
               <strong className="mono">₹{(tradePrice * tradeQty)?.toFixed(2)}</strong>
             </div>
             <button className="btn btn-primary" style={{ width: '100%', marginTop: '12px' }} onClick={calculateResult}>
-              📈 Calculate Performance
+              Calculate performance
             </button>
           </div>
         )}
       </div>
 
-      {/* Result Card */}
       {result && (
         <div className={`card result-card ${parseFloat(result.pnl) >= 0 ? 'result-win' : 'result-loss'}`} style={{ marginTop: '20px', padding: '20px' }}>
-          <div className="card-title">⏩ Fast-Forward Result</div>
+          <div className="card-title">Hindsight result</div>
           <div className="result-grid">
             <div className="result-item">
               <div className="result-label">Invested ({selectedDate})</div>
@@ -215,18 +218,33 @@ const TimeMachine = () => {
         </div>
       )}
 
-      {/* Chart */}
       {chartData.length > 0 && (
         <div className="card" style={{ marginTop: '20px' }}>
           <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '8px' }}>
             <div className="card-title" style={{ margin: 0 }}>{displayTicker} — up to {selectedDate}</div>
             <ChartRangeSelector value={chartRange} onChange={setChartRange} />
           </div>
+          <ChartTypeSelector
+            value={chartType}
+            onChange={setChartType}
+            showVolume={showVolume}
+            onVolumeToggle={setShowVolume}
+            className="chart-range-bar"
+          />
           <div style={{ height: 280 }}>
-            <CandlestickChart data={chartData} height={280} chartKey={chartRange} markIndex={tradeMarkIdx} markLabel="Trade day" />
+            <MarketChart
+              data={chartData}
+              height={280}
+              chartType={chartType}
+              showVolume={showVolume}
+              interval={historyInterval === 'intraday' ? 'intraday' : '1d'}
+              chartKey={`${chartRange}-${chartType}-${chartData.length}`}
+              markIndex={tradeMarkIdx}
+              markLabel="Trade day"
+            />
           </div>
           <div style={{ fontSize: '0.75rem', color: 'var(--text3)', textAlign: 'center', marginTop: '8px' }}>
-            Dashed vertical line marks your simulated trade date
+            Marker shows your simulated trade date
           </div>
         </div>
       )}
@@ -234,4 +252,4 @@ const TimeMachine = () => {
   );
 };
 
-export default TimeMachine;
+export default Hindsight;

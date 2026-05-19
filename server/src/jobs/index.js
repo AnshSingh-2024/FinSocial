@@ -23,8 +23,14 @@ const setupJobs = async () => {
   feedQueue.add({ type: 'fetch_news' }, { repeat: { cron: '*/30 * * * *' } });
   feedQueue.add({ type: 'fetch_news' }, { delay: 8000 });
 
+  // Rotate stock quotes (AV rate-limit friendly: small batch per run)
+  feedQueue.add({ type: 'refresh_quotes' }, { repeat: { cron: '*/5 * * * *' } });
+
   // Daily AI Stock Pick at 9 AM IST (3:30 AM UTC)
   feedQueue.add({ type: 'daily_pick' }, { repeat: { cron: '30 3 * * *' } });
+
+  // One symbol per hour — full universe over ~2 days on free AV tier
+  feedQueue.add({ type: 'refresh_daily_history' }, { repeat: { cron: '15 * * * *' } });
 
   console.log('Background jobs initialized.');
 };

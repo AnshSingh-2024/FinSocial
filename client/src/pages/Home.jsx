@@ -1,10 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useStore from '../store';
 import apiClient from '../api/client';
 import { useSocket } from '../hooks/useSocket';
-import CandlestickChart from '../components/CandlestickChart';
+import MarketChart from '../components/MarketChart';
 import ChartRangeSelector from '../components/ChartRangeSelector';
+import ChartTypeSelector from '../components/ChartTypeSelector';
+import useChartLivePoll from '../hooks/useChartLivePoll';
+import { DEFAULT_CHART_TYPE } from '../constants/chartTypes';
+import { ChevronDown } from 'lucide-react';
 import NewsFeed from '../components/NewsFeed';
 import { APP_BASE } from '../constants/routes';
 import { historyToChartData } from '../utils/chartHistory';
@@ -45,6 +49,8 @@ const Home = () => {
   const [chartTicker, setChartTicker] = useState(() =>
     loadDashboardChartTicker(useStore.getState().user?.id, FEATURED_STOCK_TICKER)
   );
+  const [chartType, setChartType] = useState(DEFAULT_CHART_TYPE);
+  const [showVolume, setShowVolume] = useState(true);
 
   const handleChartTickerChange = (ticker) => {
     setChartTicker(ticker);
@@ -166,44 +172,51 @@ const Home = () => {
     loadSignals(false);
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    setChartLoading(true);
-    apiClient
-      .get(`/stocks/${encodeURIComponent(chartTicker)}`, { params: { range: '2y' } })
+  const fetchChartBase = useCallback((ticker, silent = false) => {
+    if (!silent) setChartLoading(true);
+    return apiClient
+      .get(`/stocks/${encodeURIComponent(ticker)}`, { params: { range: '2y' } })
       .then((r) => {
-        if (cancelled) return;
         setChartBaseHistory(r.data.history || []);
         setChartInterval(r.data.historyInterval || '1d');
       })
-      .catch(() => {
-        if (!cancelled) setChartBaseHistory([]);
-      })
+      .catch(() => setChartBaseHistory([]))
       .finally(() => {
-        if (!cancelled) setChartLoading(false);
+        if (!silent) setChartLoading(false);
       });
-    return () => { cancelled = true; };
-  }, [chartTicker]);
+  }, []);
 
-  useEffect(() => {
-    if (chartRange !== '1d') return undefined;
-    let cancelled = false;
-    setChartLoading(true);
-    apiClient
-      .get(`/stocks/${encodeURIComponent(chartTicker)}`, { params: { range: '1d' } })
+  const fetchChart1d = useCallback((ticker, silent = false) => {
+    if (!silent) setChartLoading(true);
+    return apiClient
+      .get(`/stocks/${encodeURIComponent(ticker)}`, { params: { range: '1d' } })
       .then((r) => {
-        if (cancelled) return;
         setChart1dHistory(r.data.history || []);
         setChartInterval(r.data.historyInterval || 'intraday');
       })
-      .catch(() => {
-        if (!cancelled) setChart1dHistory([]);
-      })
+      .catch(() => setChart1dHistory([]))
       .finally(() => {
-        if (!cancelled) setChartLoading(false);
+        if (!silent) setChartLoading(false);
       });
-    return () => { cancelled = true; };
-  }, [chartTicker, chartRange]);
+  }, []);
+
+  useEffect(() => {
+    fetchChartBase(chartTicker);
+  }, [chartTicker, fetchChartBase]);
+
+  useEffect(() => {
+    if (chartRange !== '1d') return undefined;
+    fetchChart1d(chartTicker);
+  }, [chartTicker, chartRange, fetchChart1d]);
+
+  const pollLiveChart = useCallback(() => {
+    if (chartRange === '1d') {
+      fetchChart1d(chartTicker, true);
+    }
+    fetchChartBase(chartTicker, true);
+  }, [chartRange, chartTicker, fetchChart1d, fetchChartBase]);
+
+  useChartLivePoll({ enabled: chartRange === '1d', onPoll: pollLiveChart });
 
   useEffect(() => {
     if (chartRange === '1d') {
@@ -350,17 +363,27 @@ const Home = () => {
               <ChartRangeSelector value={chartRange} onChange={setChartRange} />
             </div>
           </div>
+          <ChartTypeSelector
+            value={chartType}
+            onChange={setChartType}
+            showVolume={showVolume}
+            onVolumeToggle={setShowVolume}
+            className="chart-range-bar"
+          />
           <div className="dashboard-chart-area">
             {chartLoading ? (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text3)' }}>
                 Loading chart…
               </div>
             ) : chartData.length > 0 ? (
-              <CandlestickChart
+              <MarketChart
                 data={chartData}
                 height={300}
                 compact
-                chartKey={`${chartTicker}-${chartRange}`}
+                chartType={chartType}
+                showVolume={showVolume}
+                interval={chartInterval === 'intraday' ? 'intraday' : '1d'}
+                chartKey={`${chartTicker}-${chartRange}-${chartType}`}
               />
             ) : (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text3)' }}>
@@ -455,7 +478,16 @@ const Home = () => {
         </section>
       </div>
 
-      <section className="dashboard-section card">
+      <button
+        type="button"
+        className="dashboard-scroll-cue"
+        onClick={() => document.getElementById('dashboardNews')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+      >
+        News &amp; community below
+        <ChevronDown size={16} strokeWidth={2.5} aria-hidden />
+      </button>
+
+      <section id="dashboardNews" className="dashboard-section card">
         <h2 className="dashboard-section-title" style={{ marginBottom: '12px' }}>📰 Market News</h2>
         <NewsFeed
           articles={newsArticles}

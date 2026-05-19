@@ -84,4 +84,4 @@ erDiagram
 
 5. **Stay informed** — User sees dashboard **feed** (anonymized activity), **news** from `NewsArticle`, and in-app **notifications** for signals or activity.
 
-6. **Measure progress** — User reviews **portfolio** performance and **leaderboard** snapshots (weekly / monthly / all-time); may use **time-machine** flow with historical prices from **StockHistory**.
+6. **Measure progress** — User reviews **portfolio** performance and **leaderboard** snapshots (weekly / monthly / all-time); may use **Hindsight** (`/app/hindsight`) with historical prices from **StockHistory**.

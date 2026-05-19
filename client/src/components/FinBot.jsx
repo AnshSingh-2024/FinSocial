@@ -1,34 +1,90 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Sparkles, X } from 'lucide-react';
 import apiClient from '../api/client';
+import useStore from '../store';
 import FinBotMessage from './FinBotMessage';
 
+const FINBOT_SIZE_KEY = 'finsocial_finbot_size';
+const DEFAULT_W = 340;
+const DEFAULT_H = 480;
+const MIN_W = 280;
+const MIN_H = 320;
+const MAX_W_RATIO = 0.9;
+const MAX_H_RATIO = 0.85;
+
+const WELCOME = "Hi! I'm FinBot — ask me about stocks, portfolio ideas, or any investing concept.";
+
+function loadSavedSize() {
+  try {
+    const raw = localStorage.getItem(FINBOT_SIZE_KEY);
+    if (!raw) return { width: DEFAULT_W, height: DEFAULT_H };
+    const parsed = JSON.parse(raw);
+    if (Number.isFinite(parsed.width) && Number.isFinite(parsed.height)) {
+      return { width: parsed.width, height: parsed.height };
+    }
+  } catch {
+    /* ignore */
+  }
+  return { width: DEFAULT_W, height: DEFAULT_H };
+}
+
+function clampSize(width, height) {
+  const maxW = Math.floor(window.innerWidth * MAX_W_RATIO);
+  const maxH = Math.floor(window.innerHeight * MAX_H_RATIO);
+  return {
+    width: Math.min(maxW, Math.max(MIN_W, width)),
+    height: Math.min(maxH, Math.max(MIN_H, height)),
+  };
+}
+
 const FinBot = () => {
-  const [open, setOpen] = useState(false);
-  const [messages, setMessages] = useState([
-    { role: 'bot', content: "Hi! I'm FinBot — ask me about stocks, portfolio ideas, or any investing concept." }
-  ]);
+  const finbotOpen = useStore((s) => s.finbotOpen);
+  const finbotPendingMessage = useStore((s) => s.finbotPendingMessage);
+  const setFinbotOpen = useStore((s) => s.setFinbotOpen);
+  const clearFinbotPending = useStore((s) => s.clearFinbotPending);
+
+  const [messages, setMessages] = useState([{ role: 'bot', content: WELCOME }]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [aiSource, setAiSource] = useState(null);
+  const [size, setSize] = useState(loadSavedSize);
+  const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 768px)').matches);
+
   const endRef = useRef(null);
+  const inFlightRef = useRef(false);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, loading]);
 
-  const handleSend = async (e) => {
-    e.preventDefault();
-    if (!input.trim() || loading) return;
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 768px)');
+    const onChange = () => setIsMobile(mq.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
 
-    const userMsg = input.trim();
-    setInput('');
-    setMessages((prev) => [...prev, { role: 'user', content: userMsg }]);
+  const submitUserMessage = useCallback(async (userMsg) => {
+    const trimmed = userMsg.trim();
+    if (!trimmed || inFlightRef.current) return;
+    inFlightRef.current = true;
+
+    let snapshot;
+    setMessages((prev) => {
+      snapshot = [...prev, { role: 'user', content: trimmed }];
+      return snapshot;
+    });
     setLoading(true);
 
     try {
-      const history = messages.slice(-6).map((m) => ({ role: m.role === 'bot' ? 'assistant' : 'user', content: m.content }));
-      const res = await apiClient.post('/tribe/finbot', { message: userMsg, history });
+      const history = snapshot
+        .slice(0, -1)
+        .slice(-6)
+        .map((m) => ({
+          role: m.role === 'bot' ? 'assistant' : 'user',
+          content: m.content,
+        }));
+      const res = await apiClient.post('/tribe/finbot', { message: trimmed, history });
       setAiSource(res.data.source || null);
       setMessages((prev) => [...prev, { role: 'bot', content: res.data.reply }]);
     } catch (err) {
@@ -41,7 +97,62 @@ const FinBot = () => {
       setMessages((prev) => [...prev, { role: 'bot', content: msg }]);
     } finally {
       setLoading(false);
+      inFlightRef.current = false;
     }
+  }, []);
+
+  useEffect(() => {
+    if (!finbotPendingMessage) return;
+    const msg = finbotPendingMessage;
+    clearFinbotPending();
+    submitUserMessage(msg);
+  }, [finbotPendingMessage, clearFinbotPending, submitUserMessage]);
+
+  const handleSend = async (e) => {
+    e.preventDefault();
+    if (!input.trim() || loading) return;
+    const userMsg = input.trim();
+    setInput('');
+    await submitUserMessage(userMsg);
+  };
+
+  const persistSize = useCallback((w, h) => {
+    try {
+      localStorage.setItem(FINBOT_SIZE_KEY, JSON.stringify({ width: w, height: h }));
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const onResizePointerDown = (e) => {
+    if (isMobile) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const startW = size.width;
+    const startH = size.height;
+
+    const onMove = (ev) => {
+      setSize(clampSize(
+        startW + (startX - ev.clientX),
+        startH + (startY - ev.clientY),
+      ));
+    };
+
+    const onUp = (ev) => {
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+      const next = clampSize(
+        startW + (startX - ev.clientX),
+        startH + (startY - ev.clientY),
+      );
+      persistSize(next.width, next.height);
+    };
+
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
   };
 
   const subtitle = aiSource === 'gemini'
@@ -52,9 +163,25 @@ const FinBot = () => {
         ? 'AI service unavailable'
         : 'FinBot assistant';
 
+  const windowStyle = !isMobile && finbotOpen
+    ? { width: size.width, height: size.height }
+    : undefined;
+
   return (
     <div className="chatbot-wrapper">
-      <div className={`chatbot-window ${open ? 'open' : ''}`}>
+      <div
+        className={`chatbot-window ${finbotOpen ? 'open' : ''} ${isMobile ? 'chatbot-window--mobile' : ''}`}
+        style={windowStyle}
+      >
+        {!isMobile && (
+          <div
+            className="chatbot-resize-handle"
+            role="presentation"
+            aria-hidden
+            onPointerDown={onResizePointerDown}
+          />
+        )}
+
         <div className="chatbot-header">
           <div className="chatbot-title">
             <div className="chatbot-avatar" aria-hidden>
@@ -67,7 +194,7 @@ const FinBot = () => {
               </div>
             </div>
           </div>
-          <button type="button" className="chatbot-close" onClick={() => setOpen(false)} aria-label="Close FinBot">
+          <button type="button" className="chatbot-close" onClick={() => setFinbotOpen(false)} aria-label="Close FinBot">
             <X size={18} strokeWidth={2} />
           </button>
         </div>
@@ -90,14 +217,19 @@ const FinBot = () => {
           />
           <button type="submit" disabled={loading || !input.trim()}>
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+              <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
             </svg>
           </button>
         </form>
       </div>
 
-      <button type="button" className="chatbot-btn" onClick={() => setOpen(!open)} aria-label={open ? 'Close FinBot' : 'Open FinBot'}>
-        {open ? <X size={22} strokeWidth={2.25} /> : <Sparkles size={26} strokeWidth={2.25} />}
+      <button
+        type="button"
+        className="chatbot-btn"
+        onClick={() => setFinbotOpen(!finbotOpen)}
+        aria-label={finbotOpen ? 'Close FinBot' : 'Open FinBot'}
+      >
+        {finbotOpen ? <X size={22} strokeWidth={2.25} /> : <Sparkles size={26} strokeWidth={2.25} />}
       </button>
     </div>
   );

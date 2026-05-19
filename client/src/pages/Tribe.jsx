@@ -234,7 +234,7 @@ const Tribe = () => {
   const formatTime = (ts) => new Date(ts).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
 
   return (
-    <div className="page tribe-page fade-in">
+    <div id="tribePage" className="page tribe-page fade-in">
       <h1 className="page-title">Tribe Rooms</h1>
       <div className="tribe-layout">
         <aside className="tribe-channels">

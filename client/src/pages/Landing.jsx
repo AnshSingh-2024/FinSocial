@@ -24,6 +24,62 @@ import { APP_BASE } from '../constants/routes';
 import LandingSceneContent from './LandingScene.jsx';
 import { LandingScrollYRef } from './landingScrollContext.jsx';
 
+const MARQUEE_ITEMS = [
+  { text: 'NIFTY 50 ▲ simulated' },
+  { text: 'Portfolio P&L live', className: 'positive' },
+  { text: 'ML signals' },
+  { text: 'News & AI briefs' },
+  { text: 'Live tribes' },
+  { text: 'Paper ₹10L' },
+];
+
+function MarqueeStripContent({ idPrefix = '' }) {
+  return MARQUEE_ITEMS.map((item) => (
+    <span key={`${idPrefix}${item.text}`} className={item.className}>
+      {item.text}
+      <span className="landing-marquee-sep" aria-hidden> · </span>
+    </span>
+  ));
+}
+
+/** Two copies in one row; CSS -50% = one copy width (animates after fonts load). */
+
+function LandingMarquee() {
+  const [animate, setAnimate] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const start = () => {
+      if (!cancelled) setAnimate(true);
+    };
+    if (document.fonts?.ready) {
+      document.fonts.ready.then(start).catch(start);
+    } else {
+      start();
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return (
+    <div className="landing-marquee mono" aria-hidden>
+      <div className="landing-marquee-track">
+        <div
+          className={`landing-marquee-strip${animate ? ' landing-marquee-strip--animate' : ''}`}
+        >
+          <div className="landing-marquee-copy">
+            <MarqueeStripContent idPrefix="a-" />
+          </div>
+          <div className="landing-marquee-copy" aria-hidden>
+            <MarqueeStripContent idPrefix="b-" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SceneFallback() {
   return (
     <div
@@ -137,7 +193,7 @@ const STEPS = [
   { icon: Wallet, title: 'Fund virtually', desc: 'Start with ₹10L practice money — no brokerage account or KYC required to learn.' },
   { icon: LineChart, title: 'Analyze & tilt', desc: 'Candle ranges, sentiment, and ML signals guide your simulated entries.' },
   { icon: MessageCircle, title: 'Discuss live', desc: "Tribes and Forum capture context you won't get from charts alone." },
-  { icon: Sparkles, title: 'Iterate fast', desc: 'Time Machine and portfolio optimise let you replay and stress-test decisions.' },
+  { icon: Sparkles, title: 'Iterate fast', desc: 'Hindsight and portfolio optimise let you replay and stress-test decisions.' },
 ];
 
 export default function Landing() {
@@ -265,38 +321,7 @@ export default function Landing() {
               </a>
             </div>
 
-            <div className="landing-marquee mono" aria-hidden>
-              <div className="landing-marquee-track">
-                <div className="landing-marquee-set">
-                  <span>NIFTY 50 ▲ simulated</span>
-                  <span>·</span>
-                  <span className="positive">Portfolio P&amp;L live</span>
-                  <span>·</span>
-                  <span>ML signals</span>
-                  <span>·</span>
-                  <span>News &amp; AI briefs</span>
-                  <span>·</span>
-                  <span>Live tribes</span>
-                  <span>·</span>
-                  <span>Paper ₹10L</span>
-                  <span> — </span>
-                </div>
-                <div className="landing-marquee-set" aria-hidden>
-                  <span>NIFTY 50 ▲ simulated</span>
-                  <span>·</span>
-                  <span className="positive">Portfolio P&amp;L live</span>
-                  <span>·</span>
-                  <span>ML signals</span>
-                  <span>·</span>
-                  <span>News &amp; AI briefs</span>
-                  <span>·</span>
-                  <span>Live tribes</span>
-                  <span>·</span>
-                  <span>Paper ₹10L</span>
-                  <span> — </span>
-                </div>
-              </div>
-            </div>
+            <LandingMarquee />
 
             <div className="landing-hero-metrics">
               <AnimatedStat value={1000000} prefix="₹" label="Starting paper balance" />
@@ -405,10 +430,10 @@ export default function Landing() {
             <Reveal delay={50}>
               <div className="landing-bento-cell landing-bento-wide">
                 <Clock className="landing-bento-ic" aria-hidden />
-                <h3>Time Machine</h3>
+                <h3>Hindsight</h3>
                 <p>Pick a historical date with price history — simulate sizing and compound forward against today&apos;s reference.</p>
                 {isAuthenticated ? (
-                  <Link className="landing-bento-link" to={`${APP_BASE}/time-machine`}>Open Time Machine →</Link>
+                  <Link className="landing-bento-link" to={`${APP_BASE}/hindsight`}>Open Hindsight →</Link>
                 ) : (
                   <Link className="landing-bento-link" to="/auth">Sign in to try →</Link>
                 )}

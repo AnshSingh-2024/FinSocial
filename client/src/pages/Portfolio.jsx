@@ -1,12 +1,17 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import apiClient from '../api/client';
 import useStore from '../store';
+import HoldingTickerMenu from '../components/HoldingTickerMenu';
+import { APP_BASE } from '../constants/routes';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
 const SECTOR_COLORS = ['#2563eb', '#16a34a', '#dc2626', '#f59e0b', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16'];
 
 const Portfolio = () => {
+  const navigate = useNavigate();
   const user = useStore((state) => state.user);
+  const askFinBot = useStore((state) => state.askFinBot);
   const [holdings, setHoldings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [portfolioData, setPortfolioData] = useState(null);
@@ -24,6 +29,33 @@ const Portfolio = () => {
 
     apiClient.get('/trades/history').then((r) => setTradeHistory(r.data)).catch(() => {});
   }, []);
+
+  const handleViewCharts = useCallback((ticker) => {
+    navigate(`${APP_BASE}/stocks?ticker=${encodeURIComponent(ticker)}`);
+  }, [navigate]);
+
+  const handleAiOverview = useCallback((h) => {
+    const name = h.name || h.displayTicker || h.ticker;
+    const pnlSign = h.pnl >= 0 ? '+' : '';
+    const prompt = [
+      `Give a concise overview of ${name} (${h.ticker}) for an Indian equity investor.`,
+      `I hold ${h.qty} shares at avg cost ₹${h.avg?.toFixed(2)}, LTP ₹${h.ltp?.toFixed(2)}, sector ${h.sector || 'Unknown'}.`,
+      `Current P&L: ${pnlSign}₹${h.pnl?.toFixed(2)} (${pnlSign}${h.pnlPct?.toFixed(2)}%).`,
+      'Cover business context, recent price action, key risks, and whether the holding size seems reasonable.',
+    ].join(' ');
+    askFinBot(prompt);
+  }, [askFinBot]);
+
+  const handleTradeHistoryToggle = () => {
+    if (showHistory) {
+      setShowHistory(false);
+      return;
+    }
+    setShowHistory(true);
+    window.setTimeout(() => {
+      document.getElementById('portfolioTradeHistory')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
+  };
 
   const handleOptimize = async () => {
     setOptimizing(true);
@@ -94,7 +126,7 @@ const Portfolio = () => {
           <div className="card-title" style={{ display: 'flex', justifyContent: 'space-between' }}>
             Current Holdings
             <div style={{ display: 'flex', gap: '8px' }}>
-              <button className="btn btn-sm" onClick={() => setShowHistory(!showHistory)}>
+              <button type="button" className="btn btn-sm" onClick={handleTradeHistoryToggle}>
                 {showHistory ? 'Hide' : 'Show'} Trade History
               </button>
               <button className="btn btn-primary btn-sm" onClick={handleOptimize} disabled={optimizing || holdings.length === 0}>
@@ -118,7 +150,13 @@ const Portfolio = () => {
                 <tbody>
                   {holdings.map((h) => (
                     <tr key={h.ticker}>
-                      <td className="mono" style={{ fontWeight: 700 }}>{h.displayTicker || h.ticker}</td>
+                      <td className="holding-ticker-cell">
+                        <HoldingTickerMenu
+                          holding={h}
+                          onAiOverview={handleAiOverview}
+                          onViewCharts={handleViewCharts}
+                        />
+                      </td>
                       <td><span className="badge badge-gray">{h.sector}</span></td>
                       <td>{h.qty}</td>
                       <td className="mono">₹{h.avg?.toFixed(2)}</td>
@@ -141,12 +179,12 @@ const Portfolio = () => {
 
       {/* Sector Pie + Optimizer */}
       {(sectorData.length > 0 || optimizeResult) && (
-        <div className="grid-2" style={{ marginBottom: '20px' }}>
+        <div className="portfolio-insights-grid">
           {sectorData.length > 0 && (
-            <div className="card">
+            <div className="card portfolio-sector-card">
               <div className="card-title">Sector Allocation</div>
-              <div style={{ height: 220 }}>
-                <ResponsiveContainer>
+              <div className="portfolio-sector-chart">
+                <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie data={sectorData} cx="50%" cy="50%" outerRadius={80} dataKey="value" nameKey="name">
                       {sectorData.map((entry, index) => (
@@ -162,8 +200,8 @@ const Portfolio = () => {
           )}
 
           {optimizeResult && (
-            <div className="card">
-              <div className="card-title" style={{ flexWrap: 'wrap', gap: '8px' }}>
+            <div className="card portfolio-optimize-card">
+              <div className="card-title portfolio-optimize-title">
                 AI portfolio optimization
                 {optimizeMeta?.mode === 'ml_max_sharpe' && (
                   <span className="badge badge-green" title="ML-informed weights toward maximum Sharpe, using roughly two years of daily prices">
@@ -172,14 +210,14 @@ const Portfolio = () => {
                 )}
               </div>
               {optimizeMeta?.optimization && (
-                <div style={{ fontSize: '0.78rem', color: 'var(--text3)', marginBottom: '10px' }}>
+                <p className="portfolio-optimize-meta">
                   Portfolio Sharpe {optimizeMeta.optimization.sharpeRatio} · expected return{' '}
                   {(optimizeMeta.optimization.portfolioExpectedReturn * 100).toFixed(1)}% · vol{' '}
                   {(optimizeMeta.optimization.portfolioVolatility * 100).toFixed(1)}% ·{' '}
                   {optimizeMeta.optimization.historyDays} trading days of history
-                </div>
+                </p>
               )}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '8px' }}>
+              <div className="portfolio-optimize-scroll">
                 {optimizeResult.map((item) => (
                   <div key={item.ticker} className="opt-item">
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -202,7 +240,7 @@ const Portfolio = () => {
 
       {/* Trade History */}
       {showHistory && (
-        <div className="card">
+        <div id="portfolioTradeHistory" className="card portfolio-trade-history">
           <div className="card-title">Trade History</div>
           {tradeHistory.length === 0 ? (
             <p style={{ padding: '12px', color: 'var(--text2)' }}>No trades yet.</p>

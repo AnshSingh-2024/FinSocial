@@ -6,7 +6,7 @@ FinSocial is a demo-ready social paper-trading platform for the Indian market (N
 
 | Layer | Technology |
 |-------|------------|
-| **Frontend** | React 19, Vite, Tailwind CSS 4, Recharts, Socket.IO client, Zustand |
+| **Frontend** | React 19, Vite, Tailwind CSS 4, TradingView Lightweight Charts, Recharts, Socket.IO client, Zustand |
 | **Core API** | Node.js **22+**, Express 5, Prisma 5, PostgreSQL + pgvector, Bull/Redis, Socket.IO |
 | **ML service** | Flask, XGBoost (v2 features), optional FinBERT on local Docker |
 | **Gen-AI service** | FastAPI, Google Gemini, sentence-transformers (RAG over pgvector) |
@@ -48,7 +48,7 @@ Minimum for local Docker:
 | `server/.env` | `JWT_SECRET` (64+ random chars), `DATABASE_URL` is set by Compose |
 | `gen-ai-service/.env` | `GEMINI_API_KEY` for real FinBot replies (keyword fallback without it) |
 
-Optional: `NEWSAPI_KEY`, `SENDGRID_API_KEY`, `ALPHAVANTAGE_API_KEY` on the server.
+Optional: `NEWSAPI_KEY`, `SENDGRID_API_KEY`, `ALPHAVANTAGE_API_KEY` on the server (enables live quotes + chart OHLC from Alpha Vantage when set; Yahoo/DB fallback otherwise).
 
 ### 2. Start the stack
 
@@ -70,7 +70,7 @@ Creates demo users, ~25 NSE stocks, Tribe channels, forum Q&A, sample signals, a
 
 ### 4. Import real price history (recommended)
 
-Charts, Time Machine, and ML training need Yahoo OHLCV — not the synthetic prices in seed metadata alone:
+Charts, Hindsight, and ML training need Yahoo OHLCV — not the synthetic prices in seed metadata alone:
 
 ```bash
 docker exec finsocial_core_api npm run import-history
@@ -99,7 +99,8 @@ Takes a few minutes for all tickers.
 
 ### Dashboard
 
-- **Configurable chart** — Pick any listed stock; choice is saved per user in `localStorage` and survives reload.
+- **Market chart** — TradingView **Lightweight Charts** with type switcher (candles, bars, line, area) and volume histogram; OHLC from Alpha Vantage when `ALPHAVANTAGE_API_KEY` is set (Yahoo/DB fallback). **1D** range polls every ~90s for the active ticker.
+- **Configurable symbol** — Pick any listed stock; choice is saved per user in `localStorage` and survives reload.
 - **Signal board** — Random sample of 5 latest ML signals; **Generate signals** runs `/predict` for all stocks on demand.
 - **Active signals stat** — Counts **all** stocks’ latest signals (BUY / SELL / HOLD), not only the 5 on the board.
 - **Trending strip** — Top movers; **market news** with manual refresh.
@@ -118,7 +119,7 @@ Takes a few minutes for all tickers.
 - **Forum** — Voting, accepted answers, AI-suggested replies.
 - **FinBot** — Gemini + RAG; server-side keyword fallback if Gen-AI is unreachable.
 - **Sentiment** — Per-stock community votes.
-- **Time Machine** — Replay a historical date and estimate P&amp;L.
+- **Hindsight** — Replay a historical date and estimate P&amp;L.
 
 ### Background jobs (core-api)
 
@@ -127,6 +128,8 @@ Takes a few minutes for all tickers.
 | ML signal refresh | Every **5** minutes |
 | Leaderboard snapshot | Hourly |
 | News fetch | Every 30 minutes (+ once after startup) |
+| Stock quote refresh | Every **5** minutes (rotating batch, AV/Yahoo) |
+| Daily history upsert | Hourly (one symbol per run when AV key set) |
 | Daily AI stock pick | 9:00 AM IST |
 
 ---
@@ -302,7 +305,7 @@ See each service’s `.env.example` for the full list.
 | FinBot generic / 503 | Set `GEN_AI_SERVICE_URL` on API and `GEMINI_API_KEY` on gen-ai. |
 | Signals never update | Redis + core-api workers running; `ML_SERVICE_URL` reachable. |
 | Socket.IO fails on Vercel | Set `VITE_BACKEND_URL` to Render API; do not rely on `/socket.io` rewrite. |
-| Charts flat / Time Machine empty | Run `npm run import-history`. |
+| Charts flat / Hindsight empty | Run `npm run import-history`. |
 | ML always heuristic | Retrain model; confirm `/ml/health` shows v2 model loaded. |
 
 ---
