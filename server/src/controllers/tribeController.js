@@ -1,12 +1,14 @@
 const axios = require('axios');
 const prisma = require('../utils/prisma');
 const logger = require('../utils/logger');
+const { ensureTribeChannelsIfNeeded } = require('../utils/ensureTribeChannels');
 
 const { genAiBaseUrl } = require('../utils/serviceUrls');
 const GEN_AI_URL = genAiBaseUrl();
 
 exports.getChannels = async (req, res) => {
   try {
+    await ensureTribeChannelsIfNeeded();
     const channels = await prisma.tribeChannel.findMany({
       orderBy: { name: 'asc' },
       include: {

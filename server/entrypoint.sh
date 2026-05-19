@@ -21,5 +21,14 @@ const p = new PrismaClient();
 echo "Applying database schema..."
 npx prisma db push --skip-generate
 
+echo "Ensuring default tribe channels (no Render Shell / seed required)..."
+node -e "
+require('dotenv').config();
+const { ensureTribeChannelsIfNeeded } = require('./src/utils/ensureTribeChannels');
+ensureTribeChannelsIfNeeded()
+  .then((n) => { console.log('Tribe channels ready:', n); })
+  .catch((e) => { console.warn('Tribe channel ensure skipped:', e.message); });
+"
+
 echo "Starting server..."
 exec node server.js

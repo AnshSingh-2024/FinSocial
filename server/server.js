@@ -22,6 +22,17 @@ setupJobs();
 startWorkers();
 
 const logger = require('./src/utils/logger');
-server.listen(PORT, () => {
-  logger.info(`Core API Server running on port ${PORT}`, { env: process.env.NODE_ENV });
-});
+const { ensureTribeChannelsIfNeeded } = require('./src/utils/ensureTribeChannels');
+
+async function start() {
+  try {
+    await ensureTribeChannelsIfNeeded();
+  } catch (err) {
+    logger.warn('Could not ensure tribe channels at startup', { error: err.message });
+  }
+  server.listen(PORT, () => {
+    logger.info(`Core API Server running on port ${PORT}`, { env: process.env.NODE_ENV });
+  });
+}
+
+start();
