@@ -1,28 +1,23 @@
-import { Suspense, useEffect, useRef, useState, useCallback } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Canvas } from '@react-three/fiber';
 import {
-  TrendingUp,
-  Users,
   Cpu,
-  Newspaper,
-  PieChart,
-  Clock,
   Zap,
   Shield,
   BarChart3,
-  MessageCircle,
-  Sparkles,
-  ChevronDown,
   ArrowRight,
-  LineChart,
-  BellRing,
-  Wallet,
 } from 'lucide-react';
 import useStore from '../store';
 import { APP_BASE } from '../constants/routes';
 import LandingSceneContent from './LandingScene.jsx';
 import { LandingScrollYRef } from './landingScrollContext.jsx';
+import { LANDING_HEADER_SECTIONS } from './landingSections.js';
+import { useLandingSectionSpy } from '../hooks/useLandingSectionSpy';
+import { useLandingDeckScroll } from '../hooks/useLandingDeckScroll.js';
+import LandingPresentationDeck from '../components/LandingPresentationDeck.jsx';
+import LandingPanel from '../components/LandingPanel.jsx';
+import { buildLandingDeckSlides } from './landingDeckSlides.jsx';
 
 const MARQUEE_ITEMS = [
   { text: 'NIFTY 50 ▲ simulated' },
@@ -170,46 +165,32 @@ function AnimatedStat({ value, label, suffix = '', prefix = '' }) {
   );
 }
 
-const FAQ_ITEMS = [
-  {
-    q: 'Is FinSocial real money?',
-    a: "No — it's a simulated brokerage. You trade with virtual balance and replay historical prices so you can learn without capital risk.",
-  },
-  {
-    q: 'What data powers the charts?',
-    a: 'Charts use historical open-high-low-close and volume; quotes and ranges update as fresh prices arrive for each symbol.',
-  },
-  {
-    q: 'How do ML signals work?',
-    a: 'For each ticker, the app runs an ML outlook and surfaces BUY · HOLD · SELL with confidence and a short rationale on your dashboard.',
-  },
-  {
-    q: 'Who sees my trades on the feed?',
-    a: 'Community feed events are anonymized — others see pseudonyms like Trader #ABC1 while you still see yourself as «You» when logged in.',
-  },
-];
-
-const STEPS = [
-  { icon: Wallet, title: 'Fund virtually', desc: 'Start with ₹10L practice money — no brokerage account or KYC required to learn.' },
-  { icon: LineChart, title: 'Analyze & tilt', desc: 'Candle ranges, sentiment, and ML signals guide your simulated entries.' },
-  { icon: MessageCircle, title: 'Discuss live', desc: "Tribes and Forum capture context you won't get from charts alone." },
-  { icon: Sparkles, title: 'Iterate fast', desc: 'Hindsight and portfolio optimise let you replay and stress-test decisions.' },
-];
-
 export default function Landing() {
   const isAuthenticated = useStore((s) => s.isAuthenticated);
-  const [scrollPct, setScrollPct] = useState(0);
   const [scrolledNav, setScrolledNav] = useState(false);
-  const [openFaq, setOpenFaq] = useState(/** @type {number | null} */ (null));
+  const [deckActiveId, setDeckActiveId] = useState('hub');
+  const [inDeck, setInDeck] = useState(false);
+  const scrollSpyId = useLandingSectionSpy([
+    { id: 'hero' },
+    { id: 'trust' },
+    { id: 'explore' },
+  ]);
+  const activeSectionId = inDeck ? deckActiveId : scrollSpyId;
   const landingScrollYRef = useRef(0);
 
+  const { scrollToSlideId } = useLandingDeckScroll(deckActiveId, setDeckActiveId, setInDeck);
+
   useEffect(() => {
+    const prevRestoration = history.scrollRestoration;
+    history.scrollRestoration = 'manual';
+
     document.body.dataset.page = 'landing';
     document.body.style.overflow = 'auto';
     document.documentElement.style.setProperty('--landing-parallax-y', '0px');
     document.documentElement.style.setProperty('--landing-parallax-x', '0px');
     document.documentElement.style.setProperty('--landing-parallax-scale', '1');
     return () => {
+      history.scrollRestoration = prevRestoration;
       delete document.body.dataset.page;
       document.body.style.overflow = 'hidden';
       document.documentElement.style.removeProperty('--landing-parallax-y');
@@ -224,9 +205,7 @@ export default function Landing() {
     setScrolledNav(y > 32);
     const doc = document.documentElement;
     const max = Math.max(1, doc.scrollHeight - window.innerHeight);
-    const pct = (y / max) * 100;
     const prog = max > 0 ? y / max : 0;
-    setScrollPct(pct);
     doc.style.setProperty('--landing-parallax-y', `${y * -0.068}px`);
     doc.style.setProperty('--landing-parallax-x', `${Math.sin(prog * Math.PI) * 10}px`);
     doc.style.setProperty('--landing-parallax-scale', String(1 + prog * 0.045));
@@ -243,15 +222,16 @@ export default function Landing() {
     };
   }, [onScroll]);
 
+  const [openFaq, setOpenFaq] = useState(/** @type {number | null} */ (null));
+
+  const deckSlides = useMemo(
+    () => buildLandingDeckSlides({ isAuthenticated, openFaq, setOpenFaq }),
+    [isAuthenticated, openFaq],
+  );
+
   return (
     <LandingScrollYRef.Provider value={landingScrollYRef}>
     <div className="landing-root">
-      <div
-        className="landing-scroll-progress"
-        style={{ transform: `scaleX(${Math.min(100, Math.max(0, scrollPct)) / 100})` }}
-        aria-hidden
-      />
-
       <div className="landing-canvas-wrap" aria-hidden>
         <div className="landing-canvas-parallax-stack">
           <Suspense fallback={<SceneFallback />}>
@@ -277,11 +257,16 @@ export default function Landing() {
         </Link>
 
         <nav className="landing-nav-center mono" aria-label="Page sections">
-          <a href="#hub" className="landing-anchor">Hub</a>
-          <a href="#flow" className="landing-anchor">Flow</a>
-          <a href="#bento" className="landing-anchor">Tools</a>
-          <a href="#social" className="landing-anchor">Voices</a>
-          <a href="#faq" className="landing-anchor">FAQ</a>
+          {LANDING_HEADER_SECTIONS.map((section) => (
+            <a
+              key={section.id}
+              href={`#${section.id}`}
+              className={`landing-anchor${activeSectionId === section.id ? ' landing-anchor--active' : ''}`}
+              aria-current={activeSectionId === section.id ? 'true' : undefined}
+            >
+              {section.headerLabel}
+            </a>
+          ))}
         </nav>
 
         <nav className="landing-nav">
@@ -297,7 +282,7 @@ export default function Landing() {
       </header>
 
       <main className="landing-main">
-        <section className="landing-hero-stack landing-snap-section landing-snap-hero">
+        <section id="hero" className="landing-hero-stack landing-snap-hero">
           <div className="landing-hero-copy">
             <p className="landing-kicker mono">India · simulated investing · social edge</p>
             <h1 className="landing-headline">
@@ -331,205 +316,40 @@ export default function Landing() {
             </div>
           </div>
 
-          <p className="landing-scroll-hint mono">
+          <p
+            className={`landing-scroll-hint mono${scrolledNav ? ' landing-scroll-hint--hidden' : ''}`}
+            aria-hidden={scrolledNav}
+          >
             Scroll
             {' '}
             <span className="landing-scroll-bounce">↓</span>
           </p>
         </section>
 
-        <Reveal className="landing-trust landing-snap-section">
-          <div>
-            <p className="landing-trust-title mono">Built for clarity and momentum</p>
-            <div className="landing-trust-pills">
-              <span><Shield size={14} aria-hidden /> Secure sessions</span>
-              <span><Cpu size={14} aria-hidden /> Reliable price pipeline</span>
-              <span><Zap size={14} aria-hidden /> Live updates</span>
-              <span><BarChart3 size={14} aria-hidden /> Charts from days to ~2 years</span>
-            </div>
-          </div>
-        </Reveal>
-
-        <section className="landing-features landing-section-pad landing-snap-section" id="hub">
+        <section id="trust" className="landing-trust">
           <Reveal>
             <div>
-              <h2 className="landing-section-title">Everything in one hub</h2>
-              <p className="landing-section-sub">Pick a capability — each card expands your desk without hopping tabs.</p>
-            </div>
-          </Reveal>
-          <div className="landing-feature-grid landing-feature-grid-relaxed">
-            <Reveal delay={60}>
-              <article className="landing-card tilt-3d landing-card-enhanced">
-                <TrendingUp className="landing-card-icon positive" aria-hidden />
-                <h3>Stocks &amp; candles</h3>
-                <p>OHLC ranges from daily snapshots through multi-year history — sentiment polls per ticker.</p>
-              </article>
-            </Reveal>
-            <Reveal delay={100}>
-              <article className="landing-card tilt-3d landing-card-enhanced">
-                <Cpu className="landing-card-icon" style={{ color: '#818cf8' }} aria-hidden />
-                <h3>Signal board</h3>
-                <p>BUY · HOLD · SELL with confidence and a short rationale from the models on your dashboard.</p>
-              </article>
-            </Reveal>
-            <Reveal delay={140}>
-              <article className="landing-card tilt-3d landing-card-enhanced">
-                <Users className="landing-card-icon" style={{ color: '#38bdf8' }} aria-hidden />
-                <h3>Tribes &amp; forum</h3>
-                <p>Rooms with polls and threaded Q&amp;A — learning out loud beats solo screens.</p>
-              </article>
-            </Reveal>
-            <Reveal delay={180}>
-              <article className="landing-card tilt-3d landing-card-enhanced">
-                <Newspaper className="landing-card-icon" style={{ color: '#fbbf24' }} aria-hidden />
-                <h3>Market news</h3>
-                <p>Market headlines with optional summaries and bullish or bearish tags for quick reads.</p>
-              </article>
-            </Reveal>
-            <Reveal delay={220}>
-              <article className="landing-card tilt-3d landing-card-enhanced landing-card-span2">
-                <PieChart className="landing-card-icon" style={{ color: '#a78bfa' }} aria-hidden />
-                <h3>Portfolio &amp; optimiser</h3>
-                <p>Paper positions, optimisation suggestions, and leaderboard context — build allocation habits without risking capital.</p>
-              </article>
-            </Reveal>
-          </div>
-        </section>
-
-        <section className="landing-how landing-section-pad landing-snap-section" id="flow">
-          <Reveal>
-            <div>
-              <h2 className="landing-section-title">How traders use FinSocial</h2>
-              <p className="landing-section-sub">A playbook you remix — hover each step for depth.</p>
-            </div>
-          </Reveal>
-          <ol className="landing-steps">
-            {STEPS.map(({ icon: Icon, title, desc }, i) => (
-              <li key={title} className="landing-step">
-                <Reveal delay={i * 80} className="landing-step-reveal">
-                  <span className="landing-step-num mono">{String(i + 1).padStart(2, '0')}</span>
-                  <div className="landing-step-body">
-                    <Icon className="landing-step-icon" aria-hidden strokeWidth={1.75} />
-                    <h3>{title}</h3>
-                    <p>{desc}</p>
-                  </div>
-                </Reveal>
-              </li>
-            ))}
-          </ol>
-        </section>
-
-        <section className="landing-bento-section landing-section-pad landing-snap-section" id="bento">
-          <Reveal>
-            <div>
-              <h2 className="landing-section-title">Toolbox</h2>
-              <p className="landing-section-sub">Modules you reopen every session.</p>
-            </div>
-          </Reveal>
-          <div className="landing-bento">
-            <Reveal delay={50}>
-              <div className="landing-bento-cell landing-bento-wide">
-                <Clock className="landing-bento-ic" aria-hidden />
-                <h3>Hindsight</h3>
-                <p>Pick a historical date with price history — simulate sizing and compound forward against today&apos;s reference.</p>
-                {isAuthenticated ? (
-                  <Link className="landing-bento-link" to={`${APP_BASE}/hindsight`}>Open Hindsight →</Link>
-                ) : (
-                  <Link className="landing-bento-link" to="/auth">Sign in to try →</Link>
-                )}
+              <p className="landing-trust-title mono">Built for clarity and momentum</p>
+              <div className="landing-trust-pills">
+                <span><Shield size={14} aria-hidden /> Secure sessions</span>
+                <span><Cpu size={14} aria-hidden /> Reliable price pipeline</span>
+                <span><Zap size={14} aria-hidden /> Live updates</span>
+                <span><BarChart3 size={14} aria-hidden /> Charts from days to ~2 years</span>
               </div>
-            </Reveal>
-            <Reveal delay={100}>
-              <div className="landing-bento-cell">
-                <BellRing className="landing-bento-ic" aria-hidden />
-                <h3>Alerts &amp; feed</h3>
-                <p>High-confidence ML nudges for watchlist tickers plus anonymised trade tape on Home.</p>
-              </div>
-            </Reveal>
-            <Reveal delay={150}>
-              <div className="landing-bento-cell">
-                <TrendingUp className="landing-bento-ic positive" aria-hidden />
-                <h3>Charts that respond</h3>
-                <p>Six ranges from a tight snapshot through multi-year daily history whenever data is available for the symbol.</p>
-              </div>
-            </Reveal>
-            <Reveal delay={100}>
-              <div className="landing-bento-cell landing-bento-wide">
-                <MessageCircle className="landing-bento-ic landing-bento-ic-blue" aria-hidden />
-                <h3>Discuss before you size</h3>
-                <p>Diligence tribeside — paste a ticker, run a poll, or link a Forum thread next to your chart.</p>
-              </div>
-            </Reveal>
-          </div>
-        </section>
-
-        <section className="landing-social landing-section-pad landing-snap-section" id="social">
-          <Reveal>
-            <div>
-              <h2 className="landing-section-title">Voices from the desk</h2>
-              <p className="landing-section-sub">What learners say about practising on FinSocial.</p>
             </div>
           </Reveal>
-          <div className="landing-carousel" role="region" aria-label="Testimonials carousel">
-            {[
-              { quote: 'I finally clicked how RSI clashes with tape — Tribe beside RELIANCE was worth the rabbit hole.', who: 'Retail learner, Mumbai' },
-              { quote: 'Paper P&L and the leaderboard made practice sessions competitive without real money on the line.', who: 'Study-circle lead, Delhi' },
-              { quote: 'Anonymised flow means I can read whale-ish size without creeping real names.', who: 'Swing hobbyist, BLR' },
-            ].map((t, i) => (
-              <blockquote key={t.who + i} className="landing-quote">
-                <p>{`"${t.quote}"`}</p>
-                <footer className="mono">{t.who}</footer>
-              </blockquote>
-            ))}
-          </div>
         </section>
 
-        <section className="landing-faq landing-section-pad landing-snap-section" id="faq">
-          <Reveal>
-            <div>
-              <h2 className="landing-section-title">FAQ</h2>
-              <p className="landing-section-sub">Tap a row to expand.</p>
-            </div>
-          </Reveal>
-          <ul className="landing-faq-list">
-            {FAQ_ITEMS.map((item, idx) => {
-              const open = openFaq === idx;
-              return (
-                <li key={item.q} className="landing-faq-item">
-                  <button
-                    type="button"
-                    className={`landing-faq-q ${open ? 'open' : ''}`}
-                    onClick={() => setOpenFaq(open ? null : idx)}
-                    aria-expanded={open}
-                  >
-                    <span>{item.q}</span>
-                    <ChevronDown className="landing-faq-chevron" size={18} aria-hidden />
-                  </button>
-                  <div className={`landing-faq-a ${open ? 'open' : ''}`} aria-hidden={!open}>
-                    {item.a}
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
 
-        <Reveal className="landing-cta-band landing-snap-section" id="cta">
-          <div className="landing-cta-inner">
-            <h2>Ready to paper-trade with the tribe?</h2>
-            <p>Open the dashboard and jump back into your paper portfolio anytime.</p>
-            <div className="landing-cta-buttons">
-              {isAuthenticated ? (
-                <Link to={APP_BASE} className="btn btn-primary landing-hero-primary">Enter FinSocial</Link>
-              ) : (
-                <Link to="/auth" className="btn btn-primary landing-hero-primary">Create account — free</Link>
-              )}
-              <a className="landing-cta-secondary mono" href="#hub">Back to top ↑</a>
-            </div>
-          </div>
-        </Reveal>
+        <LandingPanel id="explore" pinned className="landing-deck-panel">
+          <LandingPresentationDeck
+            slides={deckSlides}
+            activeId={deckActiveId}
+            onSelect={(id) => scrollToSlideId(id, 'smooth')}
+          />
+        </LandingPanel>
 
-        <footer className="landing-footer mono landing-snap-section landing-snap-footer">
+        <footer className="landing-footer mono">
           <div className="landing-footer-links">
             <Link to="/" className="landing-footer-link">Home</Link>
             <a href="#faq" className="landing-footer-link">FAQ</a>

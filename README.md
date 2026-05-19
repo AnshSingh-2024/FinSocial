@@ -2,11 +2,24 @@
 
 FinSocial is a demo-ready social paper-trading platform for the Indian market (NSE/BSE). Users trade with virtual money, follow ML signals, chat in Tribe rooms, ask questions on the forum, and get help from FinBot — with real-time updates over WebSockets.
 
+The **landing page** uses a scroll-driven product tour (Hub → Flow → Tools → Voices → FAQ → Start), a 3D candlestick hero scene, and a glass presentation deck with a curved timeline progress rail.
+
+## Live demo
+
+| Service | URL |
+|---------|-----|
+| **Web app (Vercel)** | https://fin-social-eight.vercel.app |
+| **Core API (Render)** | https://finsocial-core-api-latest.onrender.com |
+
+**Demo login:** `vikram@demo.com` / `Demo@1234`
+
+On Vercel, set `VITE_BACKEND_URL` to the Render API origin so Socket.IO (Tribe, live updates) works — HTTP `/api` is rewritten via `client/vercel.json`.
+
 ## Stack
 
 | Layer | Technology |
 |-------|------------|
-| **Frontend** | React 19, Vite, Tailwind CSS 4, TradingView Lightweight Charts, Recharts, Socket.IO client, Zustand |
+| **Frontend** | React 19, Vite, Tailwind CSS 4, **TradingView Lightweight Charts**, Recharts, React Three Fiber, Socket.IO client, Zustand |
 | **Core API** | Node.js **22+**, Express 5, Prisma 5, PostgreSQL + pgvector, Bull/Redis, Socket.IO |
 | **ML service** | Flask, XGBoost (v2 features), optional FinBERT on local Docker |
 | **Gen-AI service** | FastAPI, Google Gemini, sentence-transformers (RAG over pgvector) |
@@ -16,7 +29,7 @@ FinSocial is a demo-ready social paper-trading platform for the Indian market (N
 ## Repository layout
 
 ```
-├── client/           React SPA (Vercel)
+├── client/           React SPA (Vercel) — landing, dashboard, Tribe, forum, charts
 ├── server/           Core API, Prisma, Bull workers, Socket.IO
 ├── ml-service/       XGBoost inference + training
 ├── gen-ai-service/   FinBot, RAG, news summaries
@@ -91,6 +104,13 @@ Takes a few minutes for all tickers.
 
 ## Features
 
+### Landing & onboarding
+
+- **Hero** — 3D candlestick scene with parallax; stats marquee; scroll hint on the first viewport.
+- **Presentation deck** — Six pinned slides (Hub, Flow, Tools, Voices, FAQ, Start) in one explore panel: left timeline with curved progress, right glass detail card.
+- **Wheel-driven tour** — Scroll down from Trust into the deck and through slides; scroll up to reverse; exit at Hub (hero) or Start (footer).
+- **Trust strip** — Social proof pills before the product tour.
+
 ### Trading & portfolio
 
 - **Virtual portfolio** — ₹10L starting balance; BUY/SELL at live or cached NSE prices (Yahoo Finance / optional Alpha Vantage).
@@ -99,7 +119,7 @@ Takes a few minutes for all tickers.
 
 ### Dashboard
 
-- **Market chart** — TradingView **Lightweight Charts** with type switcher (candles, bars, line, area) and volume histogram; OHLC from Alpha Vantage when `ALPHAVANTAGE_API_KEY` is set (Yahoo/DB fallback). **1D** range polls every ~90s for the active ticker.
+- **Market chart** — [TradingView Lightweight Charts](https://www.tradingview.com/lightweight-charts/) (`lightweight-charts`) with type switcher (candles, bars, line, area) and volume histogram; OHLC from Alpha Vantage when `ALPHAVANTAGE_API_KEY` is set (Yahoo/DB fallback). **1D** range polls every ~90s for the active ticker.
 - **Configurable symbol** — Pick any listed stock; choice is saved per user in `localStorage` and survives reload.
 - **Signal board** — Random sample of 5 latest ML signals; **Generate signals** runs `/predict` for all stocks on demand.
 - **Active signals stat** — Counts **all** stocks’ latest signals (BUY / SELL / HOLD), not only the 5 on the board.
@@ -158,7 +178,7 @@ Render: core-api, ml-service, gen-ai-service
         Postgres + Redis add-ons
 ```
 
-**Important:** Vercel cannot proxy WebSockets. Set `VITE_BACKEND_URL` on Vercel to your Render API origin (e.g. `https://your-api.onrender.com`). See `client/.env.example`.
+**Important:** Vercel cannot proxy WebSockets. Set `VITE_BACKEND_URL` on Vercel to `https://finsocial-core-api-latest.onrender.com` (or your Render API origin). See `client/.env.example`.
 
 More detail: [docs/DATABASE_ER_AND_USER_FLOW.md](docs/DATABASE_ER_AND_USER_FLOW.md)
 
@@ -238,8 +258,8 @@ cd gen-ai-service && pytest test_health.py -v
 ### Vercel — client
 
 - **Root directory:** `client` (project setting — not `client/client`).
-- **Env:** `VITE_BACKEND_URL` = public Render API URL (for Socket.IO).
-- `vercel.json` rewrites `/api/*` to Render; adjust the destination URL to match your service.
+- **Env:** `VITE_BACKEND_URL` = `https://finsocial-core-api-latest.onrender.com` (for Socket.IO).
+- `vercel.json` rewrites `/api/*` to the same Render host.
 
 ### Post-deploy checklist
 
@@ -267,7 +287,7 @@ cd gen-ai-service && pytest test_health.py -v
 | `DATABASE_URL` | Yes | Postgres connection string |
 | `JWT_SECRET` | Yes | 64+ char random string |
 | `REDIS_URL` | Yes | Bull queues + workers |
-| `CORS_ORIGIN` | Yes | Vercel URL, or `*` (API reflects request origin) |
+| `CORS_ORIGIN` | Yes | `https://fin-social-eight.vercel.app` (comma-separated if several) |
 | `ML_SERVICE_URL` | Yes | Public Render ML URL |
 | `GEN_AI_SERVICE_URL` | Yes | Public Render Gen-AI URL (not `localhost`); FinBot proxy |
 | `NEWSAPI_KEY` | Recommended | Live news feed |
@@ -307,9 +327,33 @@ See each service’s `.env.example` for the full list.
 | Socket.IO fails on Vercel | Set `VITE_BACKEND_URL` to Render API; do not rely on `/socket.io` rewrite. |
 | Charts flat / Hindsight empty | Run `npm run import-history`. |
 | ML always heuristic | Retrain model; confirm `/ml/health` shows v2 model loaded. |
+| Landing deck scroll stuck | Hard refresh; ensure you are on latest client build. |
+
+---
+
+## Acknowledgments & third-party credits
+
+### TradingView — Lightweight Charts
+
+**Market and stock charts** in the FinSocial dashboard (and related OHLC visualizations) are built with **[TradingView Lightweight Charts™](https://www.tradingview.com/lightweight-charts/)** ([`lightweight-charts`](https://www.npmjs.com/package/lightweight-charts) on npm).
+
+Copyright © [TradingView, Inc.](https://www.tradingview.com/)  
+Licensed under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).
+
+FinSocial is not affiliated with, sponsored by, or endorsed by TradingView. TradingView and Lightweight Charts are trademarks of TradingView, Inc.
+
+### Other notable libraries
+
+- [React](https://react.dev/), [Vite](https://vitejs.dev/), [Tailwind CSS](https://tailwindcss.com/)
+- [Three.js](https://threejs.org/) / [@react-three/fiber](https://docs.pmnd.rs/react-three-fiber) — landing hero 3D scene
+- [Recharts](https://recharts.org/) — portfolio analytics charts
+- [Socket.IO](https://socket.io/) — real-time Tribe and notifications
+- Market data via [Yahoo Finance](https://finance.yahoo.com/) and optional [Alpha Vantage](https://www.alphavantage.co/)
 
 ---
 
 ## License
 
-ISC (per package manifests). Built as a hackathon / portfolio demo — not financial advice.
+ISC (per package manifests). Third-party components are subject to their own licenses (see **Acknowledgments** above).
+
+Built as a hackathon / portfolio demo — **not financial advice.**
