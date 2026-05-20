@@ -33,12 +33,9 @@ exports.getStock = async (req, res) => {
   try {
     const { ticker } = req.params;
 
-    const skipQuote = req.query.skipQuote === '1' || req.query.skipQuote === 'true';
-    if (!skipQuote) {
-      const q = await fetchBestEffortQuote(ticker);
-      if (q) {
-        await persistQuoteUpdate(ticker, q);
-      }
+    const q = await fetchBestEffortQuote(ticker);
+    if (q) {
+      await persistQuoteUpdate(ticker, q);
     }
 
     const stock = await prisma.stock.findUnique({ where: { ticker } });

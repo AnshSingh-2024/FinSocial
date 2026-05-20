@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useStore from '../store';
 import apiClient from '../api/client';
@@ -16,83 +16,46 @@ import {
   loadDashboardChartTicker,
   saveDashboardChartTicker,
 } from '../utils/dashboardChartPreference';
-import {
-  dashboardCacheSnapshot,
-  getDashboardCache,
-  hasDashboardContent,
-  isDashboardCacheFresh,
-  resolveCachedChart,
-  setCachedChartForTicker,
-  setDashboardCache,
-} from '../utils/dashboardCache';
 
 const DASHBOARD_EXCLUDED_TICKERS = new Set(['SUNPHARMA.NS']);
 const FEATURED_STOCK_TICKER = 'RELIANCE.NS';
 
-function readCachedHomeState() {
-  const uid = useStore.getState().user?.id;
-  if (!isDashboardCacheFresh(uid) || !hasDashboardContent()) return null;
-  return dashboardCacheSnapshot();
-}
-
 const Home = () => {
   const navigate = useNavigate();
   const user = useStore((state) => state.user);
-  const cachedInit = readCachedHomeState();
-  const initTicker = cachedInit?.chartTicker
-    || loadDashboardChartTicker(user?.id, FEATURED_STOCK_TICKER);
-  const initChartCached = resolveCachedChart(initTicker);
-  const hasInitialChart = (initChartCached?.base?.length > 0)
-    || (cachedInit?.chartBaseHistory?.length > 0);
-
   const [period, setPeriod] = useState('weekly');
-  const [trendingTickers, setTrendingTickers] = useState(cachedInit?.trendingTickers ?? []);
-  const [topStock, setTopStock] = useState(cachedInit?.topStock ?? null);
-  const [portfolioStats, setPortfolioStats] = useState(cachedInit?.portfolioStats ?? null);
-  const [feedItems, setFeedItems] = useState(cachedInit?.feedItems ?? []);
-  const [leaderboardData, setLeaderboardData] = useState(cachedInit?.leaderboardData ?? {});
-  const [signals, setSignals] = useState(cachedInit?.signals ?? []);
-  const [chartRange, setChartRange] = useState(cachedInit?.chartRange ?? '2y');
+  const [trendingTickers, setTrendingTickers] = useState([]);
+  const [topStock, setTopStock] = useState(null);
+  const [portfolioStats, setPortfolioStats] = useState(null);
+  const [feedItems, setFeedItems] = useState([]);
+  const [leaderboardData, setLeaderboardData] = useState({});
+  const [signals, setSignals] = useState([]);
+  const [chartRange, setChartRange] = useState('2y');
   const [chartData, setChartData] = useState([]);
-  const [chartLoading, setChartLoading] = useState(!hasInitialChart);
-  const [chartBaseHistory, setChartBaseHistory] = useState(
-    cachedInit?.chartBaseHistory?.length ? cachedInit.chartBaseHistory : (initChartCached?.base ?? []),
-  );
-  const [chartInterval, setChartInterval] = useState(
-    cachedInit?.chartInterval || initChartCached?.interval || '1d',
-  );
-  const [chart1dHistory, setChart1dHistory] = useState(
-    cachedInit?.chart1dHistory?.length ? cachedInit.chart1dHistory : (initChartCached?.intraday ?? []),
-  );
-  const [newsArticles, setNewsArticles] = useState(cachedInit?.newsArticles ?? []);
-  const [newsLoading, setNewsLoading] = useState(!(cachedInit?.newsArticles?.length > 0));
+  const [chartLoading, setChartLoading] = useState(false);
+  const [chartBaseHistory, setChartBaseHistory] = useState([]);
+  const [chartInterval, setChartInterval] = useState('1d');
+  const [chart1dHistory, setChart1dHistory] = useState([]);
+  const [newsArticles, setNewsArticles] = useState([]);
+  const [newsLoading, setNewsLoading] = useState(false);
   const [newsError, setNewsError] = useState(null);
   const [newsRefreshMsg, setNewsRefreshMsg] = useState(null);
   const [signalsLoading, setSignalsLoading] = useState(false);
-  const [signalsReady, setSignalsReady] = useState(cachedInit?.signalsReady ?? false);
+  const [signalsReady, setSignalsReady] = useState(false);
   const [signalsError, setSignalsError] = useState(null);
   const [signalsRefreshMsg, setSignalsRefreshMsg] = useState(null);
-  const [signalStats, setSignalStats] = useState(cachedInit?.signalStats ?? null);
-  const [chartStockOptions, setChartStockOptions] = useState(cachedInit?.chartStockOptions ?? []);
-  const [chartTicker, setChartTicker] = useState(initTicker);
+  const [signalStats, setSignalStats] = useState(null);
+  const [chartStockOptions, setChartStockOptions] = useState([]);
+  const [chartTicker, setChartTicker] = useState(() =>
+    loadDashboardChartTicker(useStore.getState().user?.id, FEATURED_STOCK_TICKER)
+  );
   const [chartType, setChartType] = useState(DEFAULT_CHART_TYPE);
   const [showVolume, setShowVolume] = useState(true);
 
   const handleChartTickerChange = (ticker) => {
     setChartTicker(ticker);
     saveDashboardChartTicker(user?.id, ticker);
-    const cached = resolveCachedChart(ticker);
-    if (cached?.base?.length) {
-      setChartBaseHistory(cached.base);
-      setChart1dHistory(cached.intraday ?? []);
-      setChartInterval(cached.interval || '1d');
-      setChartLoading(false);
-    }
   };
-
-  const persistDashboard = useCallback((partial) => {
-    setDashboardCache({ userId: user?.id ?? null, ...partial });
-  }, [user?.id]);
 
   const loadSignals = async (refresh = false) => {
     if (refresh) {
@@ -106,15 +69,8 @@ const Home = () => {
         : await apiClient.get('/feed/signals');
       const payload = r.data;
       const list = Array.isArray(payload) ? payload : (payload.signals ?? []);
-      const nextSignals = Array.isArray(list) ? list : [];
-      const nextStats = payload?.stats ?? null;
-      setSignals(nextSignals);
-      if (nextStats) setSignalStats(nextStats);
-      persistDashboard({
-        signals: nextSignals,
-        signalStats: nextStats,
-        signalsReady: true,
-      });
+      setSignals(Array.isArray(list) ? list : []);
+      if (payload?.stats) setSignalStats(payload.stats);
       if (refresh) {
         if (r.data.error && r.data.updated === 0) {
           setSignalsError(r.data.error);
@@ -134,8 +90,8 @@ const Home = () => {
     }
   };
 
-  const loadNews = async (refresh = false, silent = false) => {
-    if (!silent) setNewsLoading(true);
+  const loadNews = async (refresh = false) => {
+    setNewsLoading(true);
     setNewsError(null);
     if (refresh) setNewsRefreshMsg(null);
     try {
@@ -144,9 +100,7 @@ const Home = () => {
         ? await apiClient.post(endpoint)
         : await apiClient.get(endpoint);
       const list = r.data.articles ?? r.data;
-      const nextNews = Array.isArray(list) ? list.slice(0, 12) : [];
-      setNewsArticles(nextNews);
-      persistDashboard({ newsArticles: nextNews });
+      setNewsArticles(Array.isArray(list) ? list.slice(0, 12) : []);
       if (refresh) {
         if (r.data.error && r.data.saved === 0) {
           setNewsError(r.data.error);
@@ -204,115 +158,56 @@ const Home = () => {
 
         if (portfolioRes.data) setPortfolioStats(portfolioRes.data);
         const feed = Array.isArray(feedRes.data) ? feedRes.data : [];
-        const nextFeed = feed.slice(0, 6);
-        setFeedItems(nextFeed);
-        setDashboardCache({
-          userId: user?.id ?? null,
-          chartStockOptions: options,
-          trendingTickers: list.slice(0, 8).map(toTickerRow),
-          topStock: list.length > 0 ? toTickerRow(list[0]) : null,
-          portfolioStats: portfolioRes.data ?? null,
-          feedItems: nextFeed,
-          chartTicker: resolvedTicker,
-        });
+        setFeedItems(feed.slice(0, 6));
       });
     return () => { cancelled = true; };
   }, [user?.id]);
 
   useEffect(() => {
-    const home = getDashboardCache();
-    if (isDashboardCacheFresh(user?.id) && home.signalsReady) return;
-    loadSignals(false);
+    const saved = loadDashboardChartTicker(user?.id, FEATURED_STOCK_TICKER);
+    setChartTicker(saved);
   }, [user?.id]);
 
-  const chartFetchRef = useRef({ base: null, intraday: null });
+  useEffect(() => {
+    loadSignals(false);
+  }, []);
 
   const fetchChartBase = useCallback((ticker, silent = false) => {
-    if (!ticker) return Promise.resolve();
-    const cached = resolveCachedChart(ticker);
-    if (!silent && !(cached?.base?.length)) setChartLoading(true);
-    if (chartFetchRef.current.base === ticker) return Promise.resolve();
-    chartFetchRef.current.base = ticker;
+    if (!silent) setChartLoading(true);
     return apiClient
-      .get(`/stocks/${encodeURIComponent(ticker)}`, { params: { range: '2y', skipQuote: '1' } })
+      .get(`/stocks/${encodeURIComponent(ticker)}`, { params: { range: '2y' } })
       .then((r) => {
-        const history = r.data.history || [];
-        const interval = r.data.historyInterval || '1d';
-        setChartBaseHistory(history);
-        setChartInterval(interval);
-        const prev = resolveCachedChart(ticker);
-        setCachedChartForTicker(ticker, {
-          base: history,
-          intraday: prev?.intraday ?? [],
-          interval,
-        });
-        persistDashboard({
-          chartBaseHistory: history,
-          chartInterval: interval,
-          chartTicker: ticker,
-        });
+        setChartBaseHistory(r.data.history || []);
+        setChartInterval(r.data.historyInterval || '1d');
       })
       .catch(() => setChartBaseHistory([]))
       .finally(() => {
-        if (chartFetchRef.current.base === ticker) chartFetchRef.current.base = null;
-        setChartLoading(false);
+        if (!silent) setChartLoading(false);
       });
-  }, [persistDashboard]);
+  }, []);
 
   const fetchChart1d = useCallback((ticker, silent = false) => {
-    if (!ticker) return Promise.resolve();
-    if (!silent && chartRange === '1d') setChartLoading(true);
-    if (chartFetchRef.current.intraday === ticker) return Promise.resolve();
-    chartFetchRef.current.intraday = ticker;
+    if (!silent) setChartLoading(true);
     return apiClient
-      .get(`/stocks/${encodeURIComponent(ticker)}`, { params: { range: '1d', skipQuote: '1' } })
+      .get(`/stocks/${encodeURIComponent(ticker)}`, { params: { range: '1d' } })
       .then((r) => {
-        const history = r.data.history || [];
-        const interval = r.data.historyInterval || 'intraday';
-        setChart1dHistory(history);
-        setChartInterval(interval);
-        const prev = resolveCachedChart(ticker);
-        setCachedChartForTicker(ticker, {
-          base: prev?.base ?? [],
-          intraday: history,
-          interval,
-        });
-        persistDashboard({ chart1dHistory: history, chartInterval: interval, chartTicker: ticker });
+        setChart1dHistory(r.data.history || []);
+        setChartInterval(r.data.historyInterval || 'intraday');
       })
       .catch(() => setChart1dHistory([]))
       .finally(() => {
-        if (chartFetchRef.current.intraday === ticker) chartFetchRef.current.intraday = null;
-        setChartLoading(false);
+        if (!silent) setChartLoading(false);
       });
-  }, [chartRange, persistDashboard]);
+  }, []);
 
   useEffect(() => {
-    if (!chartTicker) return;
-    const cached = resolveCachedChart(chartTicker);
-    if (cached?.base?.length) {
-      setChartBaseHistory(cached.base);
-      setChartInterval(cached.interval || '1d');
-      setChartLoading(false);
-    }
-    const skipFetch = Boolean(cached?.base?.length) && isDashboardCacheFresh(user?.id);
-    if (!skipFetch) {
-      fetchChartBase(chartTicker, Boolean(cached?.base?.length));
-    }
-  }, [chartTicker, fetchChartBase, user?.id]);
+    fetchChartBase(chartTicker);
+  }, [chartTicker, fetchChartBase]);
 
   useEffect(() => {
-    if (chartRange !== '1d' || !chartTicker) return undefined;
-    const cached = resolveCachedChart(chartTicker);
-    if (cached?.intraday?.length) {
-      setChart1dHistory(cached.intraday);
-      setChartInterval(cached.interval || 'intraday');
-    }
-    const skipFetch = Boolean(cached?.intraday?.length) && isDashboardCacheFresh(user?.id);
-    if (!skipFetch) {
-      fetchChart1d(chartTicker, Boolean(cached?.intraday?.length));
-    }
-    return undefined;
-  }, [chartTicker, chartRange, fetchChart1d, user?.id]);
+    if (chartRange !== '1d') return undefined;
+    fetchChart1d(chartTicker);
+  }, [chartTicker, chartRange, fetchChart1d]);
 
   const pollLiveChart = useCallback(() => {
     if (chartRange === '1d') {
@@ -337,27 +232,18 @@ const Home = () => {
       .get(`/leaderboard?period=${period}`)
       .then((r) => {
         const rows = Array.isArray(r.data) ? r.data : [];
-        setLeaderboardData((prev) => {
-          const next = { ...prev, [period]: rows };
-          persistDashboard({ leaderboardData: next });
-          return next;
-        });
+        setLeaderboardData((prev) => ({ ...prev, [period]: rows }));
       })
       .catch(() => {
-        setLeaderboardData((prev) => {
-          const next = { ...prev, [period]: [] };
-          persistDashboard({ leaderboardData: next });
-          return next;
-        });
+        setLeaderboardData((prev) => ({ ...prev, [period]: [] }));
       });
-  }, [period, leaderboardData, persistDashboard]);
+  }, [period, leaderboardData]);
 
   useEffect(() => {
-    const home = getDashboardCache();
-    const hasNews = (home.newsArticles?.length > 0) || (newsArticles.length > 0);
-    const silent = isDashboardCacheFresh(user?.id) && hasNews;
-    loadNews(false, silent);
-  }, [user?.id]);
+    loadNews(false);
+    const t = setTimeout(() => loadNews(true), 3000);
+    return () => clearTimeout(t);
+  }, []);
 
   useEffect(() => {
     if (!newsRefreshMsg) return undefined;
@@ -374,18 +260,12 @@ const Home = () => {
   // Real-time feed updates via socket
   useSocket({
     'feed:new': (event) => {
-      setFeedItems((prev) => {
-        const next = [{ ...event, isLive: true }, ...prev].slice(0, 8);
-        setDashboardCache({ feedItems: next });
-        return next;
-      });
+      setFeedItems((prev) => [{ ...event, isLive: true }, ...prev].slice(0, 8));
     },
     'feed:news': (article) => {
       setNewsArticles((prev) => {
         if (prev.some((a) => a.id === article.id)) return prev;
-        const next = [article, ...prev].slice(0, 12);
-        setDashboardCache({ newsArticles: next });
-        return next;
+        return [article, ...prev].slice(0, 12);
       });
     },
     'signal:new': () => {
@@ -415,7 +295,7 @@ const Home = () => {
   };
 
   return (
-    <div className="page" id="homePage">
+    <div className="page fade-in" id="homePage">
       <h1 className="page-title">Dashboard</h1>
       
       {/* Stats */}
@@ -491,7 +371,7 @@ const Home = () => {
             className="chart-range-bar"
           />
           <div className="dashboard-chart-area">
-            {chartLoading && chartData.length === 0 ? (
+            {chartLoading ? (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text3)' }}>
                 Loading chart…
               </div>
@@ -590,7 +470,7 @@ const Home = () => {
               </div>
           ) : (
             <div style={{ color: 'var(--text3)', fontSize: '0.85rem' }}>
-              {(!signalsReady && !signals.length) || signalsLoading
+              {!signalsReady || signalsLoading
                 ? 'Loading signals…'
                 : 'No signals yet. Tap Refresh or wait for auto-refresh.'}
         </div>

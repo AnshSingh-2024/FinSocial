@@ -2,35 +2,24 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import apiClient from '../api/client';
 import useStore from '../store';
-import {
-  getForumDetailCache,
-  isForumDetailFresh,
-  setForumDetailCache,
-} from '../utils/appCache';
 import { APP_BASE } from '../constants/routes';
 
 const ForumDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const user = useStore((s) => s.user);
-  const cached = getForumDetailCache(id);
-  const [question, setQuestion] = useState(
-    isForumDetailFresh(id, user?.id) ? cached?.question ?? null : null,
-  );
-  const [loading, setLoading] = useState(!isForumDetailFresh(id, user?.id));
+  const [question, setQuestion] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [answerBody, setAnswerBody] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [aiSuggestion, setAiSuggestion] = useState('');
   const [loadingAi, setLoadingAi] = useState(false);
 
   useEffect(() => {
-    const silent = isForumDetailFresh(id, user?.id);
-    if (!silent) setLoading(true);
     apiClient.get(`/forum/${id}`).then((r) => {
       setQuestion(r.data);
-      setForumDetailCache(id, r.data);
     }).finally(() => setLoading(false));
-  }, [id, user?.id]);
+  }, [id]);
 
   const handleVoteQ = async (direction) => {
     try {
@@ -70,11 +59,7 @@ const ForumDetail = () => {
     setSubmitting(true);
     try {
       const r = await apiClient.post(`/forum/${id}/answers`, { body: answerBody });
-      setQuestion((prev) => {
-        const next = { ...prev, answers: [...(prev.answers || []), r.data] };
-        setForumDetailCache(id, next);
-        return next;
-      });
+      setQuestion((prev) => ({ ...prev, answers: [...(prev.answers || []), r.data] }));
       setAnswerBody('');
     } catch {
       alert('Failed to post answer');
@@ -108,7 +93,7 @@ const ForumDetail = () => {
   if (!question) return <div className="page"><p>Question not found.</p></div>;
 
   return (
-    <div className="page">
+    <div className="page fade-in">
       <button className="stock-back" onClick={() => navigate(`${APP_BASE}/forum`)}>← Back to Forum</button>
 
       {/* Question */}

@@ -1,15 +1,5 @@
 import { useState, useEffect } from 'react';
 import apiClient from '../api/client';
-import useStore from '../store';
-import {
-  getHindsightHistoryCache,
-  getHindsightTickersCache,
-  isHindsightHistoryFresh,
-  isHindsightTickersFresh,
-  setCachedChartForTicker,
-  setHindsightHistoryCache,
-  setHindsightTickersCache,
-} from '../utils/appCache';
 import MarketChart from '../components/MarketChart';
 import ChartRangeSelector from '../components/ChartRangeSelector';
 import ChartTypeSelector from '../components/ChartTypeSelector';
@@ -17,7 +7,6 @@ import { DEFAULT_CHART_TYPE } from '../constants/chartTypes';
 import { historyToChartData, sliceHistoryForRange } from '../utils/chartHistory';
 
 const Hindsight = () => {
-  const user = useStore((s) => s.user);
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedTicker, setSelectedTicker] = useState('RELIANCE.NS');
   const [history, setHistory] = useState([]);
@@ -28,11 +17,7 @@ const Hindsight = () => {
   const [currentPrice, setCurrentPrice] = useState(null);
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [tickers, setTickers] = useState(
-    isHindsightTickersFresh(user?.id)
-      ? getHindsightTickersCache()
-      : [],
-  );
+  const [tickers, setTickers] = useState([]);
   const [chartRange, setChartRange] = useState('1y');
   const [historyInterval, setHistoryInterval] = useState('1d');
   const [chartType, setChartType] = useState(DEFAULT_CHART_TYPE);
@@ -45,54 +30,38 @@ const Hindsight = () => {
 
   useEffect(() => {
     apiClient.get('/stocks').then((r) => {
-      const list = r.data.map((s) => ({ ticker: s.ticker, display: s.displayTicker, currentPrice: s.price }));
-      setTickers(list);
-      setHindsightTickersCache(list, user?.id);
+      setTickers(r.data.map((s) => ({ ticker: s.ticker, display: s.displayTicker, currentPrice: s.price })));
     }).catch(() => {});
-  }, [user?.id]);
-
-  const applyHistoryToState = (hist, interval, price) => {
-    setHistoryInterval(interval);
-    const filtered = hist.filter((d) => {
-      const dateStr = new Date(d.date).toISOString().split('T')[0];
-      return dateStr <= selectedDate;
-    });
-    setHistory(filtered.map((d) => ({
-      ...d,
-      dateStr: new Date(d.date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' }),
-    })));
-    const selectedEntry = hist.find((d) => {
-      const dateStr = new Date(d.date).toISOString().split('T')[0];
-      return dateStr === selectedDate;
-    });
-    setTradeDate(selectedEntry || filtered[filtered.length - 1]);
-    setTradePrice(selectedEntry?.close || filtered[filtered.length - 1]?.close);
-    const latest = tickers.find((t) => t.ticker === selectedTicker);
-    setCurrentPrice(latest?.currentPrice || price);
-  };
+  }, []);
 
   const loadHistory = async () => {
+    setLoading(true);
     setResult(null);
-    const cached = getHindsightHistoryCache(selectedTicker);
-    const silent = cached?.history?.length && isHindsightHistoryFresh(selectedTicker, user?.id);
-    if (silent) {
-      applyHistoryToState(cached.history, cached.historyInterval, cached.price);
-    } else {
-      setLoading(true);
-    }
     try {
-      const r = await apiClient.get(`/stocks/${encodeURIComponent(selectedTicker)}`, {
-        params: { range: '2y', skipQuote: '1' },
-      });
+      const r = await apiClient.get(`/stocks/${encodeURIComponent(selectedTicker)}`, { params: { range: '2y' } });
+      setHistoryInterval(r.data.historyInterval || '1d');
       const hist = r.data.history || [];
-      const interval = r.data.historyInterval || '1d';
-      setHindsightHistoryCache(selectedTicker, {
-        history: hist,
-        historyInterval: interval,
-        price: r.data.price,
+
+      const filtered = hist.filter((d) => {
+        const dateStr = new Date(d.date).toISOString().split('T')[0];
+        return dateStr <= selectedDate;
       });
-      setCachedChartForTicker(selectedTicker, { base: hist, intraday: [], interval });
-      applyHistoryToState(hist, interval, r.data.price);
+
+      setHistory(filtered.map((d) => ({
+        ...d,
+        dateStr: new Date(d.date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' }),
+      })));
+
+      const selectedEntry = hist.find((d) => {
+        const dateStr = new Date(d.date).toISOString().split('T')[0];
+        return dateStr === selectedDate;
+      });
+
+      setTradeDate(selectedEntry || filtered[filtered.length - 1]);
+      setTradePrice(selectedEntry?.close || filtered[filtered.length - 1]?.close);
+
+      const latest = tickers.find((t) => t.ticker === selectedTicker);
+      setCurrentPrice(latest?.currentPrice || r.data.price);
     } catch {
       alert('Failed to load history for this stock');
     } finally {
@@ -134,7 +103,7 @@ const Hindsight = () => {
       : -1;
 
   return (
-    <div className="page">
+    <div className="page fade-in">
       <div style={{ marginBottom: '16px' }}>
         <h1 className="page-title">Hindsight</h1>
         <p style={{ color: 'var(--text2)', fontSize: '0.9rem', marginTop: '4px' }}>

@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { clearAppCache } from '../utils/appCache';
 
 const useStore = create((set) => ({
   user: JSON.parse(localStorage.getItem('finsocial_user') || 'null'),
@@ -26,7 +25,6 @@ const useStore = create((set) => ({
   logout: () => {
     localStorage.removeItem('finsocial_user');
     localStorage.removeItem('finsocial_token');
-    clearAppCache();
     set({ user: null, token: null, isAuthenticated: false, unreadCount: 0 });
   },
 
