@@ -17,28 +17,36 @@ import { APP_BASE } from '../constants/routes';
 import { LANDING_PINNED_SECTIONS } from './landingSections.js';
 
 const STEPS = [
-  { icon: Wallet, title: 'Fund virtually', desc: 'Start with ₹10L practice money — no brokerage account or KYC required to learn.' },
-  { icon: LineChart, title: 'Analyze & tilt', desc: 'Candle ranges, sentiment, and ML signals guide your simulated entries.' },
-  { icon: MessageCircle, title: 'Discuss live', desc: "Tribes and Forum capture context you won't get from charts alone." },
-  { icon: Sparkles, title: 'Iterate fast', desc: 'Hindsight and portfolio optimise let you replay and stress-test decisions.' },
+  { icon: Wallet, title: 'Create & fund', desc: 'Sign up free and get ₹10L paper cash — no broker link, no KYC, no real orders.' },
+  { icon: LineChart, title: 'Read the tape', desc: 'Open any NSE ticker: six chart ranges, community sentiment, and ML BUY · HOLD · SELL on the dashboard.' },
+  { icon: MessageCircle, title: 'Trade & talk', desc: 'Execute simulated buys and sells, then debrief in Tribe rooms, Forum threads, or with FinBot.' },
+  { icon: Sparkles, title: 'Review & rank', desc: 'Track portfolio P&L, replay dates in Hindsight, follow profiles, and climb the weekly leaderboard.' },
 ];
 
 const FAQ_ITEMS = [
   {
-    q: 'Is FinSocial real money?',
-    a: "No — it's a simulated brokerage. You trade with virtual balance and replay historical prices so you can learn without capital risk.",
+    q: 'Is this real money trading?',
+    a: 'No. FinSocial is a simulated desk — every trade uses your virtual balance and stored market prices. Nothing is sent to a live broker.',
   },
   {
-    q: 'What data powers the charts?',
-    a: 'Charts use historical open-high-low-close and volume; quotes and ranges update as fresh prices arrive for each symbol.',
+    q: 'What stocks and charts are available?',
+    a: 'The demo ships with ~25 NSE tickers (e.g. RELIANCE, TCS, INFY). Charts use OHLCV history from the database; live quotes refresh on a schedule when market data APIs are configured.',
   },
   {
     q: 'How do ML signals work?',
-    a: 'For each ticker, the app runs an ML outlook and surfaces BUY · HOLD · SELL with confidence and a short rationale on your dashboard.',
+    a: 'An XGBoost model scores each ticker for BUY, HOLD, or SELL with confidence and a short rationale. Signals refresh on a cron (about every five minutes) and can be triggered manually from Home. Community sentiment is blended into the stored confidence score.',
   },
   {
-    q: 'Who sees my trades on the feed?',
-    a: 'Community feed events are anonymized — others see pseudonyms like Trader #ABC1 while you still see yourself as «You» when logged in.',
+    q: 'What is FinBot?',
+    a: 'FinBot is an in-app assistant powered by Gemini with optional RAG over your docs and market context. Use it from the floating chat or inside Tribe channels when you want a second opinion.',
+  },
+  {
+    q: 'Who sees my activity?',
+    a: 'The community feed anonymises other traders (e.g. Trader #A1B2). You see yourself as «You». Profiles and leaderboard show public stats and holdings tickers — not your email.',
+  },
+  {
+    q: 'Does it cost anything?',
+    a: 'The demo is free to use. You only need an account to persist portfolio, watchlist, tribes, and forum activity.',
   },
 ];
 
@@ -61,28 +69,28 @@ export function buildLandingDeckSlides({ isAuthenticated, openFaq, setOpenFaq })
         <div className="landing-deck-slide landing-deck-slide--hub landing-hub-grid">
           <article className="landing-card landing-card-enhanced">
             <TrendingUp className="landing-card-icon positive" aria-hidden />
-            <h3>Stocks &amp; candles</h3>
-            <p>OHLC ranges from daily snapshots through multi-year history — sentiment polls per ticker.</p>
+            <h3>Stocks &amp; charts</h3>
+            <p>TradingView-style candles from intraday through multi-year history, plus per-ticker bullish / bearish polls.</p>
           </article>
           <article className="landing-card landing-card-enhanced">
             <Cpu className="landing-card-icon" style={{ color: '#818cf8' }} aria-hidden />
-            <h3>Signal board</h3>
-            <p>BUY · HOLD · SELL with confidence and a short rationale from the models on your dashboard.</p>
+            <h3>ML signal board</h3>
+            <p>XGBoost verdicts with confidence, reasoning, and optional probability breakdown on the Stocks table.</p>
           </article>
           <article className="landing-card landing-card-enhanced">
             <Users className="landing-card-icon" style={{ color: '#38bdf8' }} aria-hidden />
-            <h3>Tribes &amp; forum</h3>
-            <p>Rooms with polls and threaded Q&amp;A — learning out loud beats solo screens.</p>
+            <h3>Tribe, Forum &amp; FinBot</h3>
+            <p>Real-time tribe rooms with polls, threaded forum Q&amp;A, and a Gemini-powered assistant when you are stuck.</p>
           </article>
           <article className="landing-card landing-card-enhanced">
             <Newspaper className="landing-card-icon" style={{ color: '#fbbf24' }} aria-hidden />
-            <h3>Market news</h3>
-            <p>Market headlines with optional summaries and bullish or bearish tags for quick reads.</p>
+            <h3>News &amp; live feed</h3>
+            <p>Headlines with AI summaries on Home, plus an anonymised trade tape so you can read flow without doxxing.</p>
           </article>
           <article className="landing-card landing-card-enhanced">
             <PieChart className="landing-card-icon" style={{ color: '#a78bfa' }} aria-hidden />
-            <h3>Portfolio &amp; optimiser</h3>
-            <p>Paper positions, optimisation suggestions, and leaderboard context — build allocation habits without risking capital.</p>
+            <h3>Portfolio &amp; ranks</h3>
+            <p>Paper positions, allocation hints, public profiles, and weekly / monthly / all-time leaderboards.</p>
           </article>
         </div>
       );
@@ -109,7 +117,7 @@ export function buildLandingDeckSlides({ isAuthenticated, openFaq, setOpenFaq })
           <div className="landing-bento-cell landing-bento-wide">
             <Clock className="landing-bento-ic" aria-hidden />
             <h3>Hindsight</h3>
-            <p>Pick a historical date with price history — simulate sizing and compound forward against today&apos;s reference.</p>
+            <p>Pick a past session date, size a hypothetical trade, and see how it would have compounded against today&apos;s price.</p>
             {isAuthenticated ? (
               <Link className="landing-bento-link" to={`${APP_BASE}/hindsight`}>Open Hindsight →</Link>
             ) : (
@@ -118,18 +126,18 @@ export function buildLandingDeckSlides({ isAuthenticated, openFaq, setOpenFaq })
           </div>
           <div className="landing-bento-cell">
             <BellRing className="landing-bento-ic" aria-hidden />
-            <h3>Alerts &amp; feed</h3>
-            <p>High-confidence ML nudges for watchlist tickers plus anonymised trade tape on Home.</p>
+            <h3>Price alerts</h3>
+            <p>Set watchlist alerts when ML confidence crosses your threshold — notifications land in-app when Redis is up.</p>
           </div>
           <div className="landing-bento-cell">
             <TrendingUp className="landing-bento-ic positive" aria-hidden />
-            <h3>Charts that respond</h3>
-            <p>Six ranges from a tight snapshot through multi-year daily history whenever data is available for the symbol.</p>
+            <h3>Six chart ranges</h3>
+            <p>From 1D through ~2Y daily bars; the dashboard chart polls intraday while you watch a single name.</p>
           </div>
           <div className="landing-bento-cell landing-bento-wide">
             <MessageCircle className="landing-bento-ic landing-bento-ic-blue" aria-hidden />
-            <h3>Discuss before you size</h3>
-            <p>Diligence tribeside — paste a ticker, run a poll, or link a Forum thread next to your chart.</p>
+            <h3>Profiles &amp; copy context</h3>
+            <p>Tap leaderboard rows or holdings to open trader profiles, then jump straight into that stock&apos;s chart.</p>
           </div>
         </div>
       );
@@ -137,9 +145,9 @@ export function buildLandingDeckSlides({ isAuthenticated, openFaq, setOpenFaq })
       children = (
         <div className="landing-deck-slide landing-deck-slide--social landing-deck-quotes" role="region" aria-label="Testimonials">
           {[
-            { quote: 'I finally clicked how RSI clashes with tape — Tribe beside RELIANCE was worth the rabbit hole.', who: 'Retail learner, Mumbai' },
-            { quote: 'Paper P&L and the leaderboard made practice sessions competitive without real money on the line.', who: 'Study-circle lead, Delhi' },
-            { quote: 'Anonymised flow means I can read whale-ish size without creeping real names.', who: 'Swing hobbyist, BLR' },
+            { quote: 'Signals plus tribe chat finally connected RSI noise to what people were actually doing on RELIANCE.', who: 'Paper trader, Mumbai' },
+            { quote: 'We ran a weekly leaderboard in our study group — competitive without anyone risking tuition money.', who: 'Campus investing club, Pune' },
+            { quote: 'FinBot answered my margin question while the Forum thread stayed focused on the chart setup.', who: 'First-time investor, Bengaluru' },
           ].map((t, i) => (
             <blockquote key={t.who + i} className="landing-quote">
               <p>{`"${t.quote}"`}</p>
@@ -176,11 +184,16 @@ export function buildLandingDeckSlides({ isAuthenticated, openFaq, setOpenFaq })
       children = (
         <div className="landing-deck-slide landing-deck-slide--cta">
           <div className="landing-cta-inner">
+            <h2>Your paper desk is one signup away</h2>
+            <p>
+              Build habits on NSE names with charts, ML signals, and a community that trades in the open —
+              simulated balances only, no financial advice.
+            </p>
             <div className="landing-cta-buttons">
               {isAuthenticated ? (
-                <Link to={APP_BASE} className="btn btn-primary landing-hero-primary">Enter FinSocial</Link>
+                <Link to={APP_BASE} className="btn btn-primary landing-hero-primary">Go to dashboard</Link>
               ) : (
-                <Link to="/auth" className="btn btn-primary landing-hero-primary">Create account — free</Link>
+                <Link to="/auth" className="btn btn-primary landing-hero-primary">Create free account</Link>
               )}
               <a className="landing-cta-secondary mono" href="#hero">Back to top ↑</a>
             </div>

@@ -23,12 +23,12 @@ import { buildLandingDeckSlides } from './landingDeckSlides.jsx';
 import { LANDING_PINNED_SECTIONS } from './landingSections.js';
 
 const MARQUEE_ITEMS = [
-  { text: 'NIFTY 50 ▲ simulated' },
-  { text: 'Portfolio P&L live', className: 'positive' },
-  { text: 'ML signals' },
-  { text: 'News & AI briefs' },
-  { text: 'Live tribes' },
-  { text: 'Paper ₹10L' },
+  { text: '25 NSE names' },
+  { text: 'Paper ₹10L', className: 'positive' },
+  { text: 'ML BUY · HOLD · SELL' },
+  { text: 'Tribes & Forum' },
+  { text: 'FinBot on tap' },
+  { text: 'Weekly leaderboard' },
 ];
 
 function MarqueeStripContent({ idPrefix = '' }) {
@@ -309,15 +309,15 @@ export default function Landing() {
       <main className="landing-main">
         <section id="hero" className="landing-hero-stack landing-snap-hero">
           <div className="landing-hero-copy">
-            <p className="landing-kicker mono">India · simulated investing · social edge</p>
+            <p className="landing-kicker mono">NSE paper trading · India-first · learn with others</p>
             <h1 className="landing-headline">
-              Trade together.
+              Practice the market.
               {' '}
-              <span className="landing-accent">Grow smarter.</span>
+              <span className="landing-accent">With your crew.</span>
             </h1>
             <p className="landing-lead">
-              A community-first paper-trading desk: tribe rooms, Q&amp;A, signals, news, and portfolios together.
-              A live candlestick backdrop stays visible as you scroll, and the navigation stays at hand so context never slips away.
+              FinSocial is a virtual brokerage for Indian equities: candlestick charts, ML signals, tribe chat,
+              forum Q&amp;A, FinBot, and a community leaderboard — all on ₹10L paper money, zero capital at risk.
             </p>
 
             <div className="landing-hero-actions">
@@ -327,17 +327,17 @@ export default function Landing() {
                 <Link to="/auth" className="btn btn-primary landing-hero-primary">Create free account</Link>
               )}
               <a className="landing-ghost-link" href="#hub">
-                Explore features <ArrowRight size={14} aria-hidden />
+                See what&apos;s inside <ArrowRight size={14} aria-hidden />
               </a>
             </div>
 
             <LandingMarquee />
 
             <div className="landing-hero-metrics">
-              <AnimatedStat value={1000000} prefix="₹" label="Starting paper balance" />
-              <AnimatedStat value={560} suffix="+" label="Trading days of history (≈2y)" />
-              <AnimatedStat value={5} suffix=" min" label="Typical signal refresh" />
-              <AnimatedStat value={30} suffix=" min" label="Typical news refresh" />
+              <AnimatedStat value={1000000} prefix="₹" label="Virtual starting balance" />
+              <AnimatedStat value={25} label="NSE stocks in the desk" />
+              <AnimatedStat value={5} suffix=" min" label="Signal refresh cadence" />
+              <AnimatedStat value={6} label="Chart ranges per ticker" />
             </div>
           </div>
 
@@ -354,12 +354,12 @@ export default function Landing() {
         <section id="trust" className="landing-trust">
           <Reveal>
             <div>
-              <p className="landing-trust-title mono">Built for clarity and momentum</p>
+              <p className="landing-trust-title mono">Built for learners, not brokers</p>
               <div className="landing-trust-pills">
-                <span><Shield size={14} aria-hidden /> Secure sessions</span>
-                <span><Cpu size={14} aria-hidden /> Reliable price pipeline</span>
-                <span><Zap size={14} aria-hidden /> Live updates</span>
-                <span><BarChart3 size={14} aria-hidden /> Charts from days to ~2 years</span>
+                <span><Shield size={14} aria-hidden /> JWT-secured accounts</span>
+                <span><Cpu size={14} aria-hidden /> XGBoost signal desk</span>
+                <span><Zap size={14} aria-hidden /> Live tribes &amp; sockets</span>
+                <span><BarChart3 size={14} aria-hidden /> TradingView-style charts</span>
               </div>
             </div>
           </Reveal>
