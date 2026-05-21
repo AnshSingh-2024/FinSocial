@@ -8,34 +8,42 @@ const { marketDayKey, serializeHistoryBar } = require('./marketTime');
 
 const yf = new YahooFinance();
 
-const VALID_RANGES = new Set(['1d', '1w', '1m', '3m', '1y', '2y']);
+const VALID_RANGES = new Set(['1d', '1w', '1m', '3m', '1y', '2y', '5y', '10y']);
 
 /** Max daily bars per range (~trading days). */
 const TRADING_DAY_TAKE = {
-  '1w': 7,
-  '1m': 22,
-  '3m': 66,
-  '1y': 252,
-  '2y': 560,
+  '1w':  7,
+  '1m':  22,
+  '3m':  66,
+  '1y':  252,
+  '2y':  560,
+  '5y':  1260,
+  '10y': 2520,
 };
 
 function normalizeRange(raw) {
   if (!raw || typeof raw !== 'string') return '2y';
   const key = raw.trim().toLowerCase().replace(/\s+/g, '');
   const aliases = {
-    '1day': '1d',
-    '1week': '1w',
-    '1wk': '1w',
-    '1month': '1m',
-    '1mo': '1m',
-    '3month': '3m',
+    '1day':    '1d',
+    '1week':   '1w',
+    '1wk':     '1w',
+    '1month':  '1m',
+    '1mo':     '1m',
+    '3month':  '3m',
     '3months': '3m',
-    '3mo': '3m',
-    '1year': '1y',
-    '1yr': '1y',
-    '2year': '2y',
-    '2years': '2y',
-    '2yr': '2y',
+    '3mo':     '3m',
+    '1year':   '1y',
+    '1yr':     '1y',
+    '2year':   '2y',
+    '2years':  '2y',
+    '2yr':     '2y',
+    '5year':   '5y',
+    '5years':  '5y',
+    '5yr':     '5y',
+    '10year':  '10y',
+    '10years': '10y',
+    '10yr':    '10y',
   };
   const mapped = aliases[key] || key;
   return VALID_RANGES.has(mapped) ? mapped : '2y';
@@ -169,7 +177,10 @@ async function fetchHistoryForRange(stockId, ticker, rangeInput) {
     };
   }
 
-  const avDaily = await fetchAvDailyForRange(stockId, ticker, range);
+  // For long ranges, skip external APIs — only the DB has 5–10yr of history
+  const isLongRange = range === '5y' || range === '10y';
+
+  const avDaily = isLongRange ? null : await fetchAvDailyForRange(stockId, ticker, range);
   if (avDaily?.length) {
     return {
       history: mapHistoryResponse(avDaily),

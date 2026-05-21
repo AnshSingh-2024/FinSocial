@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useStore from '../store';
 import apiClient from '../api/client';
@@ -11,54 +11,97 @@ import { DEFAULT_CHART_TYPE } from '../constants/chartTypes';
 import { ChevronDown } from 'lucide-react';
 import NewsFeed from '../components/NewsFeed';
 import { APP_BASE } from '../constants/routes';
+import { DASHBOARD_EXCLUDED_TICKERS } from '../constants/dashboard';
 import { historyToChartData } from '../utils/chartHistory';
 import {
   loadDashboardChartTicker,
   saveDashboardChartTicker,
 } from '../utils/dashboardChartPreference';
+import {
+  dashboardCacheSnapshot,
+  getDashboardCache,
+  hasDashboardContent,
+  isDashboardCacheFresh,
+  resolveCachedChart,
+  setCachedChartForTicker,
+  setDashboardCache,
+} from '../utils/dashboardCache';
+import { setPortfolioCache, setStocksListCache } from '../utils/appCache';
 
-const DASHBOARD_EXCLUDED_TICKERS = new Set(['SUNPHARMA.NS']);
 const FEATURED_STOCK_TICKER = 'RELIANCE.NS';
+
+function readCachedHomeState() {
+  const uid = useStore.getState().user?.id;
+  if (!isDashboardCacheFresh(uid) || !hasDashboardContent()) return null;
+  return dashboardCacheSnapshot();
+}
 
 const Home = () => {
   const navigate = useNavigate();
   const user = useStore((state) => state.user);
+  const cachedInit = readCachedHomeState();
+  const initTicker = cachedInit?.chartTicker
+    || loadDashboardChartTicker(user?.id, FEATURED_STOCK_TICKER);
+  const initChartCached = resolveCachedChart(initTicker);
+  const hasInitialChart = (initChartCached?.base?.length > 0)
+    || (cachedInit?.chartBaseHistory?.length > 0);
+
   const [period, setPeriod] = useState('weekly');
-  const [trendingTickers, setTrendingTickers] = useState([]);
-  const [topStock, setTopStock] = useState(null);
-  const [portfolioStats, setPortfolioStats] = useState(null);
-  const [feedItems, setFeedItems] = useState([]);
-  const [leaderboardData, setLeaderboardData] = useState({});
-  const [signals, setSignals] = useState([]);
-  const [chartRange, setChartRange] = useState('2y');
+  const [trendingTickers, setTrendingTickers] = useState(cachedInit?.trendingTickers ?? []);
+  const [topStock, setTopStock] = useState(cachedInit?.topStock ?? null);
+  const [portfolioStats, setPortfolioStats] = useState(cachedInit?.portfolioStats ?? null);
+  const [feedItems, setFeedItems] = useState(cachedInit?.feedItems ?? []);
+  const [leaderboardData, setLeaderboardData] = useState(cachedInit?.leaderboardData ?? {});
+  const [signals, setSignals] = useState(cachedInit?.signals ?? []);
+  const [chartRange, setChartRange] = useState(cachedInit?.chartRange ?? '2y');
   const [chartData, setChartData] = useState([]);
-  const [chartLoading, setChartLoading] = useState(false);
-  const [chartBaseHistory, setChartBaseHistory] = useState([]);
-  const [chartInterval, setChartInterval] = useState('1d');
-  const [chart1dHistory, setChart1dHistory] = useState([]);
-  const [newsArticles, setNewsArticles] = useState([]);
-  const [newsLoading, setNewsLoading] = useState(false);
+  const [chartLoading, setChartLoading] = useState(!hasInitialChart);
+  const [chartBaseHistory, setChartBaseHistory] = useState(
+    cachedInit?.chartBaseHistory?.length ? cachedInit.chartBaseHistory : (initChartCached?.base ?? []),
+  );
+  const [chartInterval, setChartInterval] = useState(
+    cachedInit?.chartInterval || initChartCached?.interval || '1d',
+  );
+  const [chart1dHistory, setChart1dHistory] = useState(
+    cachedInit?.chart1dHistory?.length ? cachedInit.chart1dHistory : (initChartCached?.intraday ?? []),
+  );
+  const [newsArticles, setNewsArticles] = useState(cachedInit?.newsArticles ?? []);
+  const [newsLoading, setNewsLoading] = useState(!(cachedInit?.newsArticles?.length > 0));
   const [newsError, setNewsError] = useState(null);
   const [newsRefreshMsg, setNewsRefreshMsg] = useState(null);
   const [signalsLoading, setSignalsLoading] = useState(false);
-  const [signalsReady, setSignalsReady] = useState(false);
+  const [signalsReady, setSignalsReady] = useState(cachedInit?.signalsReady ?? false);
   const [signalsError, setSignalsError] = useState(null);
   const [signalsRefreshMsg, setSignalsRefreshMsg] = useState(null);
-  const [signalStats, setSignalStats] = useState(null);
-  const [chartStockOptions, setChartStockOptions] = useState([]);
-  const [chartTicker, setChartTicker] = useState(() =>
-    loadDashboardChartTicker(useStore.getState().user?.id, FEATURED_STOCK_TICKER)
-  );
+  const [signalStats, setSignalStats] = useState(cachedInit?.signalStats ?? null);
+  const [chartStockOptions, setChartStockOptions] = useState(cachedInit?.chartStockOptions ?? []);
+  const [chartTicker, setChartTicker] = useState(initTicker);
   const [chartType, setChartType] = useState(DEFAULT_CHART_TYPE);
   const [showVolume, setShowVolume] = useState(true);
+
+  const signalsRefreshInFlightRef = useRef(false);
+  const signalsSocketDebounceRef = useRef(null);
+  const chartFetchRef = useRef({ base: null, intraday: null });
+
+  const persistDashboard = useCallback((partial) => {
+    setDashboardCache({ userId: user?.id ?? null, ...partial });
+  }, [user?.id]);
 
   const handleChartTickerChange = (ticker) => {
     setChartTicker(ticker);
     saveDashboardChartTicker(user?.id, ticker);
+    const cached = resolveCachedChart(ticker);
+    if (cached?.base?.length) {
+      setChartBaseHistory(cached.base);
+      setChart1dHistory(cached.intraday ?? []);
+      setChartInterval(cached.interval || '1d');
+      setChartLoading(false);
+    }
   };
 
-  const loadSignals = async (refresh = false) => {
+  const loadSignals = useCallback(async (refresh = false) => {
     if (refresh) {
+      signalsRefreshInFlightRef.current = true;
       setSignalsLoading(true);
       setSignalsError(null);
       setSignalsRefreshMsg(null);
@@ -69,8 +112,15 @@ const Home = () => {
         : await apiClient.get('/feed/signals');
       const payload = r.data;
       const list = Array.isArray(payload) ? payload : (payload.signals ?? []);
-      setSignals(Array.isArray(list) ? list : []);
-      if (payload?.stats) setSignalStats(payload.stats);
+      const nextSignals = Array.isArray(list) ? list : [];
+      const nextStats = payload?.stats ?? null;
+      setSignals(nextSignals);
+      if (nextStats) setSignalStats(nextStats);
+      persistDashboard({
+        signals: nextSignals,
+        signalStats: nextStats,
+        signalsReady: true,
+      });
       if (refresh) {
         if (r.data.error && r.data.updated === 0) {
           setSignalsError(r.data.error);
@@ -86,12 +136,24 @@ const Home = () => {
       }
     } finally {
       setSignalsReady(true);
-      if (refresh) setSignalsLoading(false);
+      if (refresh) {
+        signalsRefreshInFlightRef.current = false;
+        setSignalsLoading(false);
+      }
     }
-  };
+  }, [persistDashboard]);
 
-  const loadNews = async (refresh = false) => {
-    setNewsLoading(true);
+  const scheduleSignalsReload = useCallback(() => {
+    if (signalsRefreshInFlightRef.current) return;
+    if (signalsSocketDebounceRef.current) clearTimeout(signalsSocketDebounceRef.current);
+    signalsSocketDebounceRef.current = setTimeout(() => {
+      signalsSocketDebounceRef.current = null;
+      loadSignals(false);
+    }, 1500);
+  }, [loadSignals]);
+
+  const loadNews = async (refresh = false, silent = false) => {
+    if (!silent) setNewsLoading(true);
     setNewsError(null);
     if (refresh) setNewsRefreshMsg(null);
     try {
@@ -100,7 +162,9 @@ const Home = () => {
         ? await apiClient.post(endpoint)
         : await apiClient.get(endpoint);
       const list = r.data.articles ?? r.data;
-      setNewsArticles(Array.isArray(list) ? list.slice(0, 12) : []);
+      const nextNews = Array.isArray(list) ? list.slice(0, 12) : [];
+      setNewsArticles(nextNews);
+      persistDashboard({ newsArticles: nextNews });
       if (refresh) {
         if (r.data.error && r.data.saved === 0) {
           setNewsError(r.data.error);
@@ -118,8 +182,69 @@ const Home = () => {
     }
   };
 
+  const applyDashboardBootstrap = useCallback((rawList, portfolioData, feedData, silent) => {
+    const options = rawList.map((s) => ({
+      ticker: s.ticker,
+      label: s.displayTicker || s.ticker.replace(/\.NS$/i, ''),
+    }));
+    const list = rawList.filter((s) => !DASHBOARD_EXCLUDED_TICKERS.has(s.ticker));
+    const toTickerRow = (s) => ({
+      tickerDisplay: s.displayTicker || s.ticker,
+      tickerFull: s.ticker,
+      price: s.price,
+      changePct: s.changePct ?? 0,
+      chg: `${s.changePct >= 0 ? '+' : ''}${s.changePct?.toFixed(2)}%`,
+      up: s.changePct >= 0,
+      id: s.id,
+    });
+    const trending = list.slice(0, 8).map(toTickerRow);
+    const top = list.length > 0 ? toTickerRow(list[0]) : null;
+    const nextFeed = Array.isArray(feedData) ? feedData.slice(0, 6) : [];
+
+    setChartStockOptions(options);
+    setTopStock(top);
+    setTrendingTickers(trending);
+    if (portfolioData) setPortfolioStats(portfolioData);
+    setFeedItems(nextFeed);
+
+    const cachedTicker = getDashboardCache().chartTicker
+      || loadDashboardChartTicker(user?.id, FEATURED_STOCK_TICKER);
+    let resolvedTicker = cachedTicker;
+
+    if (!silent) {
+      const savedTicker = loadDashboardChartTicker(user?.id, FEATURED_STOCK_TICKER);
+      resolvedTicker = options.some((o) => o.ticker === savedTicker)
+        ? savedTicker
+        : FEATURED_STOCK_TICKER;
+      setChartTicker(resolvedTicker);
+      if (resolvedTicker !== savedTicker) {
+        saveDashboardChartTicker(user?.id, resolvedTicker);
+      }
+    } else if (options.length && !options.some((o) => o.ticker === cachedTicker)) {
+      resolvedTicker = options.some((o) => o.ticker === FEATURED_STOCK_TICKER)
+        ? FEATURED_STOCK_TICKER
+        : options[0].ticker;
+      setChartTicker(resolvedTicker);
+      saveDashboardChartTicker(user?.id, resolvedTicker);
+    }
+
+    setDashboardCache({
+      userId: user?.id ?? null,
+      chartStockOptions: options,
+      trendingTickers: trending,
+      topStock: top,
+      portfolioStats: portfolioData ?? null,
+      feedItems: nextFeed,
+      chartTicker: resolvedTicker,
+    });
+    setStocksListCache({ list: rawList, userId: user?.id });
+    if (portfolioData) setPortfolioCache({ data: portfolioData, userId: user?.id });
+  }, [user?.id]);
+
   useEffect(() => {
     let cancelled = false;
+    const silent = isDashboardCacheFresh(user?.id) && hasDashboardContent();
+
     Promise.all([
       apiClient.get('/stocks').catch(() => ({ data: [] })),
       apiClient.get('/portfolio').catch(() => ({ data: null })),
@@ -128,86 +253,134 @@ const Home = () => {
       .then(([stocksRes, portfolioRes, feedRes]) => {
         if (cancelled) return;
         const rawList = Array.isArray(stocksRes.data) ? stocksRes.data : [];
-        const options = rawList.map((s) => ({
-          ticker: s.ticker,
-          label: s.displayTicker || s.ticker.replace(/\.NS$/i, ''),
-        }));
-        setChartStockOptions(options);
-
-        const savedTicker = loadDashboardChartTicker(user?.id, FEATURED_STOCK_TICKER);
-        const resolvedTicker = options.some((o) => o.ticker === savedTicker)
-          ? savedTicker
-          : FEATURED_STOCK_TICKER;
-        setChartTicker(resolvedTicker);
-        if (resolvedTicker !== savedTicker) {
-          saveDashboardChartTicker(user?.id, resolvedTicker);
-        }
-
-        const list = rawList.filter((s) => !DASHBOARD_EXCLUDED_TICKERS.has(s.ticker));
-        const toTickerRow = (s) => ({
-          tickerDisplay: s.displayTicker || s.ticker,
-          tickerFull: s.ticker,
-        price: s.price,
-          changePct: s.changePct ?? 0,
-        chg: `${s.changePct >= 0 ? '+' : ''}${s.changePct?.toFixed(2)}%`,
-          up: s.changePct >= 0,
-          id: s.id,
-        });
-        setTopStock(list.length > 0 ? toTickerRow(list[0]) : null);
-        setTrendingTickers(list.slice(0, 8).map(toTickerRow));
-
-        if (portfolioRes.data) setPortfolioStats(portfolioRes.data);
-        const feed = Array.isArray(feedRes.data) ? feedRes.data : [];
-        setFeedItems(feed.slice(0, 6));
+        applyDashboardBootstrap(rawList, portfolioRes.data, feedRes.data, silent);
       });
     return () => { cancelled = true; };
-  }, [user?.id]);
+  }, [user?.id, applyDashboardBootstrap]);
 
   useEffect(() => {
-    const saved = loadDashboardChartTicker(user?.id, FEATURED_STOCK_TICKER);
-    setChartTicker(saved);
-  }, [user?.id]);
-
-  useEffect(() => {
+    const home = getDashboardCache();
+    if (isDashboardCacheFresh(user?.id) && home.signalsReady) return;
     loadSignals(false);
-  }, []);
+  }, [user?.id, loadSignals]);
 
-  const fetchChartBase = useCallback((ticker, silent = false) => {
-    if (!silent) setChartLoading(true);
+  const fetchChartBase = useCallback((ticker, silent = false, range = '2y') => {
+    if (!ticker) return Promise.resolve();
+    const cached = resolveCachedChart(ticker);
+    if (!silent && !(cached?.base?.length)) setChartLoading(true);
+    if (chartFetchRef.current.base === ticker) return Promise.resolve();
+    chartFetchRef.current.base = ticker;
     return apiClient
-      .get(`/stocks/${encodeURIComponent(ticker)}`, { params: { range: '2y' } })
+      .get(`/stocks/${encodeURIComponent(ticker)}`, { params: { range, skipQuote: '1' } })
       .then((r) => {
-        setChartBaseHistory(r.data.history || []);
-        setChartInterval(r.data.historyInterval || '1d');
+        const history = r.data.history || [];
+        const interval = r.data.historyInterval || '1d';
+        setChartBaseHistory(history);
+        setChartInterval(interval);
+        const prev = resolveCachedChart(ticker);
+        setCachedChartForTicker(ticker, {
+          base: history,
+          intraday: prev?.intraday ?? [],
+          interval,
+        });
+        persistDashboard({
+          chartBaseHistory: history,
+          chartInterval: interval,
+          chartTicker: ticker,
+        });
       })
       .catch(() => setChartBaseHistory([]))
       .finally(() => {
-        if (!silent) setChartLoading(false);
+        if (chartFetchRef.current.base === ticker) chartFetchRef.current.base = null;
+        setChartLoading(false);
       });
-  }, []);
+  }, [persistDashboard]);
 
   const fetchChart1d = useCallback((ticker, silent = false) => {
-    if (!silent) setChartLoading(true);
+    if (!ticker) return Promise.resolve();
+    if (!silent && chartRange === '1d') setChartLoading(true);
+    if (chartFetchRef.current.intraday === ticker) return Promise.resolve();
+    chartFetchRef.current.intraday = ticker;
     return apiClient
-      .get(`/stocks/${encodeURIComponent(ticker)}`, { params: { range: '1d' } })
+      .get(`/stocks/${encodeURIComponent(ticker)}`, { params: { range: '1d', skipQuote: '1' } })
       .then((r) => {
-        setChart1dHistory(r.data.history || []);
-        setChartInterval(r.data.historyInterval || 'intraday');
+        const history = r.data.history || [];
+        const interval = r.data.historyInterval || 'intraday';
+        setChart1dHistory(history);
+        setChartInterval(interval);
+        const prev = resolveCachedChart(ticker);
+        setCachedChartForTicker(ticker, {
+          base: prev?.base ?? [],
+          intraday: history,
+          interval,
+        });
+        persistDashboard({ chart1dHistory: history, chartInterval: interval, chartTicker: ticker });
       })
       .catch(() => setChart1dHistory([]))
       .finally(() => {
-        if (!silent) setChartLoading(false);
+        if (chartFetchRef.current.intraday === ticker) chartFetchRef.current.intraday = null;
+        setChartLoading(false);
       });
-  }, []);
+  }, [chartRange, persistDashboard]);
 
   useEffect(() => {
-    fetchChartBase(chartTicker);
-  }, [chartTicker, fetchChartBase]);
+    if (!chartTicker) return;
+    const cached = resolveCachedChart(chartTicker);
+    if (cached?.base?.length) {
+      setChartBaseHistory(cached.base);
+      setChartInterval(cached.interval || '1d');
+      setChartLoading(false);
+    }
+    const skipFetch = Boolean(cached?.base?.length) && isDashboardCacheFresh(user?.id);
+    if (!skipFetch) {
+      fetchChartBase(chartTicker, Boolean(cached?.base?.length));
+    }
+  }, [chartTicker, fetchChartBase, user?.id]);
 
   useEffect(() => {
-    if (chartRange !== '1d') return undefined;
-    fetchChart1d(chartTicker);
-  }, [chartTicker, chartRange, fetchChart1d]);
+    if (chartRange !== '1d' || !chartTicker) return undefined;
+    const cached = resolveCachedChart(chartTicker);
+    if (cached?.intraday?.length) {
+      setChart1dHistory(cached.intraday);
+      setChartInterval(cached.interval || 'intraday');
+    }
+    const skipFetch = Boolean(cached?.intraday?.length) && isDashboardCacheFresh(user?.id);
+    if (!skipFetch) {
+      fetchChart1d(chartTicker, Boolean(cached?.intraday?.length));
+    }
+    return undefined;
+  }, [chartTicker, chartRange, fetchChart1d, user?.id]);
+
+  // Re-fetch from server when switching to long ranges (5y/10y need more bars than cached 2y)
+  useEffect(() => {
+    if (!chartTicker || chartRange === '1d') return;
+    if (chartRange !== '5y' && chartRange !== '10y') return;
+    setChartLoading(true);
+    // Reset ref so a ticker switch while on 5y also re-fetches
+    chartFetchRef.current.base = null;
+    apiClient
+      .get(`/stocks/${encodeURIComponent(chartTicker)}`, { params: { range: chartRange, skipQuote: '1' } })
+      .then((r) => {
+        const history = r.data.history || [];
+        const interval = r.data.historyInterval || '1d';
+        setChartBaseHistory(history);
+        setChartInterval(interval);
+        const prev = resolveCachedChart(chartTicker);
+        setCachedChartForTicker(chartTicker, {
+          base: history,
+          intraday: prev?.intraday ?? [],
+          interval,
+        });
+        persistDashboard({ chartBaseHistory: history, chartInterval: interval, chartTicker });
+      })
+      .catch(() => {})
+      .finally(() => setChartLoading(false));
+  }, [chartTicker, chartRange, persistDashboard]);
+
+  // Persist chartRange selection so it survives navigation
+  useEffect(() => {
+    persistDashboard({ chartRange });
+  }, [chartRange, persistDashboard]);
 
   const pollLiveChart = useCallback(() => {
     if (chartRange === '1d') {
@@ -232,18 +405,27 @@ const Home = () => {
       .get(`/leaderboard?period=${period}`)
       .then((r) => {
         const rows = Array.isArray(r.data) ? r.data : [];
-        setLeaderboardData((prev) => ({ ...prev, [period]: rows }));
+        setLeaderboardData((prev) => {
+          const next = { ...prev, [period]: rows };
+          persistDashboard({ leaderboardData: next });
+          return next;
+        });
       })
       .catch(() => {
-        setLeaderboardData((prev) => ({ ...prev, [period]: [] }));
+        setLeaderboardData((prev) => {
+          const next = { ...prev, [period]: [] };
+          persistDashboard({ leaderboardData: next });
+          return next;
+        });
       });
-  }, [period, leaderboardData]);
+  }, [period, leaderboardData, persistDashboard]);
 
   useEffect(() => {
-    loadNews(false);
-    const t = setTimeout(() => loadNews(true), 3000);
-    return () => clearTimeout(t);
-  }, []);
+    const home = getDashboardCache();
+    const hasNews = (home.newsArticles?.length > 0) || (newsArticles.length > 0);
+    const silent = isDashboardCacheFresh(user?.id) && hasNews;
+    loadNews(false, silent);
+  }, [user?.id]);
 
   useEffect(() => {
     if (!newsRefreshMsg) return undefined;
@@ -257,19 +439,32 @@ const Home = () => {
     return () => clearTimeout(t);
   }, [signalsRefreshMsg]);
 
+  useEffect(() => () => {
+    if (signalsSocketDebounceRef.current) clearTimeout(signalsSocketDebounceRef.current);
+  }, []);
+
   // Real-time feed updates via socket
   useSocket({
     'feed:new': (event) => {
-      setFeedItems((prev) => [{ ...event, isLive: true }, ...prev].slice(0, 8));
+      setFeedItems((prev) => {
+        const next = [{ ...event, isLive: true }, ...prev].slice(0, 8);
+        setDashboardCache({ feedItems: next });
+        return next;
+      });
     },
     'feed:news': (article) => {
       setNewsArticles((prev) => {
         if (prev.some((a) => a.id === article.id)) return prev;
-        return [article, ...prev].slice(0, 12);
+        const next = [article, ...prev].slice(0, 12);
+        setDashboardCache({ newsArticles: next });
+        return next;
       });
     },
-    'signal:new': () => {
-      loadSignals(false);
+    'signals:refreshed': () => {
+      scheduleSignalsReload();
+    },
+    'signal:new': (payload) => {
+      if (payload?.isDailyPick) scheduleSignalsReload();
     },
   });
 

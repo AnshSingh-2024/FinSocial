@@ -135,6 +135,9 @@ model Signal {
   reasoning  String
   rsi        Float?
   macd       Float?
+  buyProb    Float?   // 3-class model: P(BUY)
+  holdProb   Float?   // 3-class model: P(HOLD)
+  sellProb   Float?   // 3-class model: P(SELL)
   source     String   @default("ml") // ml | community
   createdAt  DateTime @default(now())
 

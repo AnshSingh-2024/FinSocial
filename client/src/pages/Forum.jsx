@@ -1,12 +1,19 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import apiClient from '../api/client';
+import useStore from '../store';
+import { getForumListCache, isForumListFresh, setForumListCache } from '../utils/appCache';
 import { APP_BASE } from '../constants/routes';
 
 const Forum = () => {
   const navigate = useNavigate();
-  const [questions, setQuestions] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const user = useStore((s) => s.user);
+  const forumCache = getForumListCache();
+  const [questions, setQuestions] = useState(
+    isForumListFresh(user?.id) ? forumCache.questions : [],
+  );
+  const [loading, setLoading] = useState(!isForumListFresh(user?.id));
+  const [loadError, setLoadError] = useState(null);
   const [showAskForm, setShowAskForm] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newBody, setNewBody] = useState('');
@@ -15,15 +22,20 @@ const Forum = () => {
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
+    const silent = isForumListFresh(user?.id);
+    if (!silent) setLoading(true);
+    setLoadError(null);
     apiClient.get('/forum').then((res) => {
-      setQuestions(res.data);
-    }).catch(() => {
-      setQuestions([
-        { id: '1', title: 'How do I read a candlestick chart?', body: 'Just starting out...', tags: ['Beginner'], votes: 42, views: 104, _count: { answers: 2 }, user: { username: 'arjun99' }, createdAt: new Date().toISOString() },
-        { id: '2', title: 'What is the impact of Fed rate cuts on IT sector?', body: 'Curious about TCS...', tags: ['Macro', 'IT'], votes: 28, views: 76, _count: { answers: 1 }, user: { username: 'priya_m' }, createdAt: new Date().toISOString() },
-      ]);
+      const list = res.data;
+      setQuestions(list);
+      setForumListCache(list, user?.id);
+    }).catch((err) => {
+      if (!silent) {
+        setQuestions([]);
+        setLoadError(err.response?.data?.error || err.message || 'Could not load questions');
+      }
     }).finally(() => setLoading(false));
-  }, []);
+  }, [user?.id]);
 
   const handleAskQuestion = async (e) => {
     e.preventDefault();
@@ -33,7 +45,11 @@ const Forum = () => {
         body: newBody,
         tags: newTags.split(',').map((t) => t.trim()).filter(Boolean),
       });
-      setQuestions((prev) => [res.data, ...prev]);
+      setQuestions((prev) => {
+        const next = [res.data, ...prev];
+        setForumListCache(next, user?.id);
+        return next;
+      });
       setShowAskForm(false);
       setNewTitle(''); setNewBody(''); setNewTags('');
     } catch {
@@ -120,8 +136,13 @@ const Forum = () => {
             </div>
           </div>
 
+          {loadError && (
+            <p style={{ color: 'var(--red)', marginBottom: '12px', fontSize: '0.85rem' }}>{loadError}</p>
+          )}
           {loading ? (
             <p style={{ color: 'var(--text2)' }}>Loading questions...</p>
+          ) : filtered.length === 0 && !loadError ? (
+            <p style={{ color: 'var(--text2)' }}>No questions yet. Be the first to ask.</p>
           ) : filtered.map((q) => (
             <div key={q.id} className="card forum-q-card" style={{ marginBottom: '12px', padding: '16px', cursor: 'pointer' }}
               onClick={() => navigate(`${APP_BASE}/forum/${q.id}`)}>

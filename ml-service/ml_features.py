@@ -9,23 +9,38 @@ import os
 import numpy as np
 import pandas as pd
 
-# Label: forward return over N days exceeds threshold (fraction, e.g. 0.01 = +1%)
+# Label: forward return over N days exceeds threshold (fraction, e.g. 0.015 = +1.5%)
 LABEL_HORIZON_DAYS = int(os.environ.get("ML_LABEL_HORIZON_DAYS", "5"))
-LABEL_THRESHOLD = float(os.environ.get("ML_LABEL_THRESHOLD", "0.01"))
+LABEL_THRESHOLD = float(os.environ.get("ML_LABEL_THRESHOLD", "0.015"))
+LABEL_SELL_THRESHOLD = float(os.environ.get("ML_LABEL_SELL_THRESHOLD", "-0.015"))  # symmetric
 
 FEATURE_COLUMNS = [
+    # --- Returns / momentum ---
     "ret_1d",
     "ret_5d",
+    "ret_10d",         # medium-term momentum (fills gap between 5d and 20d)
     "ret_20d",
-    "vol_ratio",
+    "ret_1d_lag1",     # yesterday's return — momentum memory
+    "ret_1d_lag2",     # day-before-yesterday
+    "roc_10",          # 10-day rate-of-change (normalised % move)
+    # --- Volume ---
+    "vol_ratio",       # current vol / 20d avg
+    "vol_5d_ratio",    # 5d avg vol / 20d avg — short-term volume surge
+    # --- Oscillators ---
     "rsi",
+    "stoch_k",         # 14-period Stochastic %K — momentum with range context
+    # --- MACD ---
     "macd",
     "macd_signal",
-    "macd_hist",
+    "macd_hist_slope", # rate-of-change of MACD momentum
+    # --- Trend ---
+    "adx",             # Average Directional Index — trend vs. chop (key for HOLD detection)
     "dist_sma20",
     "dist_sma50",
+    # --- Volatility / Bollinger ---
     "bb_position",
-    "range_pct",
+    "bb_width_ratio",  # BB width / SMA20 — volatility regime
+    "atr_ratio",       # 14-day ATR as % of price
 ]
 
 
@@ -84,8 +99,9 @@ def calculate_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
     df["sma_50"] = close.rolling(50).mean()
 
     delta = close.diff()
-    gain = delta.where(delta > 0, 0.0).rolling(14).mean()
-    loss = (-delta.where(delta < 0, 0.0)).rolling(14).mean()
+    # Wilder's EMA smoothing (alpha=1/14) — standard RSI, matches TradingView
+    gain = delta.where(delta > 0, 0.0).ewm(alpha=1/14, adjust=False).mean()
+    loss = (-delta.where(delta < 0, 0.0)).ewm(alpha=1/14, adjust=False).mean()
     rs = gain / loss.replace(0, np.nan)
     df["rsi"] = 100 - (100 / (1 + rs))
 
@@ -99,6 +115,12 @@ def calculate_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
     df["bb_upper"] = bb_mid + 2 * bb_std
     df["bb_lower"] = bb_mid - 2 * bb_std
 
+    # Stochastic %K (14-period): momentum oscillator with high/low range context
+    lowest_low = df["low"].rolling(14).min()
+    highest_high = df["high"].rolling(14).max()
+    stoch_range = (highest_high - lowest_low).replace(0, np.nan)
+    df["stoch_k"] = (100 * (close - lowest_low) / stoch_range).fillna(50.0)
+
     return df
 
 
@@ -109,32 +131,69 @@ def add_ml_features(df: pd.DataFrame) -> pd.DataFrame:
     vol = df["volume"].astype(float).clip(lower=0)
     vol_ma = vol.rolling(20).mean()
 
-    df["ret_1d"] = close.pct_change(1)
-    df["ret_5d"] = close.pct_change(5)
-    df["ret_20d"] = close.pct_change(20)
+    df["ret_1d"]    = close.pct_change(1)
+    df["ret_5d"]    = close.pct_change(5)
+    df["ret_10d"]   = close.pct_change(10)
+    df["ret_20d"]   = close.pct_change(20)
+    df["ret_1d_lag1"] = df["ret_1d"].shift(1)
+    df["ret_1d_lag2"] = df["ret_1d"].shift(2)
+    df["roc_10"]    = (close - close.shift(10)) / close.shift(10).replace(0, np.nan)  # raw ROC
     df["vol_ratio"] = np.where(vol_ma > 0, vol / vol_ma, 1.0)
 
-    df["macd_hist"] = df["macd"] - df["macd_signal"]
+    # Short-term volume surge: 5d avg vs 20d avg
+    vol_5d_ma = vol.rolling(5).mean()
+    df["vol_5d_ratio"] = np.where(vol_ma > 0, vol_5d_ma / vol_ma, 1.0)
+
+    # MACD histogram slope (momentum acceleration)
+    df["macd_hist"]       = df["macd"] - df["macd_signal"]
+    df["macd_hist_slope"] = df["macd_hist"].diff(1)
+
     df["dist_sma20"] = (close - df["sma_20"]) / df["sma_20"].replace(0, np.nan)
     df["dist_sma50"] = (close - df["sma_50"]) / df["sma_50"].replace(0, np.nan)
 
     bb_width = (df["bb_upper"] - df["bb_lower"]).replace(0, np.nan)
-    df["bb_position"] = (close - df["bb_lower"]) / bb_width
-    df["bb_position"] = df["bb_position"].fillna(0.5)
+    df["bb_position"]    = ((close - df["bb_lower"]) / bb_width).fillna(0.5)
+    df["bb_width_ratio"] = (bb_width / df["sma_20"].replace(0, np.nan)).fillna(0.0)
 
-    df["range_pct"] = (df["high"] - df["low"]) / close
+    # ATR ratio: 14-day exponential true range as fraction of price
+    tr = pd.concat([
+        df["high"] - df["low"],
+        (df["high"] - df["close"].shift(1)).abs(),
+        (df["low"]  - df["close"].shift(1)).abs(),
+    ], axis=1).max(axis=1)
+    atr14 = tr.ewm(span=14, adjust=False).mean()
+    df["atr_ratio"] = atr14 / close.replace(0, np.nan)
+
+    # ADX: Average Directional Index — trend STRENGTH (not direction)
+    # High ADX (>25) = trending market (clearer BUY/SELL), Low ADX (<20) = choppy (HOLD)
+    high_p  = df["high"].astype(float)
+    low_p   = df["low"].astype(float)
+    up_move   = high_p.diff()
+    down_move = -low_p.diff()
+    plus_dm  = pd.Series(np.where((up_move > down_move) & (up_move > 0),   up_move,   0.0), index=df.index)
+    minus_dm = pd.Series(np.where((down_move > up_move) & (down_move > 0), down_move, 0.0), index=df.index)
+    safe_atr = atr14.replace(0, np.nan)
+    plus_di  = 100 * plus_dm.ewm(span=14, adjust=False).mean()  / safe_atr
+    minus_di = 100 * minus_dm.ewm(span=14, adjust=False).mean() / safe_atr
+    dx = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di).replace(0, np.nan)
+    df["adx"] = dx.ewm(span=14, adjust=False).mean().fillna(20.0)
 
     return df
 
 
-def add_target(df: pd.DataFrame, horizon: int = LABEL_HORIZON_DAYS, threshold: float = LABEL_THRESHOLD) -> pd.DataFrame:
+def add_target(df: pd.DataFrame, horizon: int = LABEL_HORIZON_DAYS, threshold: float = LABEL_THRESHOLD, sell_threshold: float = LABEL_SELL_THRESHOLD) -> pd.DataFrame:
     df = df.copy()
     fwd = df["close"].shift(-horizon) / df["close"] - 1.0
-    df["target"] = (fwd > threshold).astype(int)
+    # 3-class: 0=SELL, 1=HOLD, 2=BUY
+    df["target"] = np.select(
+        [fwd > threshold, fwd < sell_threshold],
+        [2, 0],
+        default=1
+    ).astype(int)
     return df
 
 
-def build_training_frame(raw_df: pd.DataFrame, horizon: int = LABEL_HORIZON_DAYS, threshold: float = LABEL_THRESHOLD) -> pd.DataFrame:
+def build_training_frame(raw_df: pd.DataFrame, horizon: int = LABEL_HORIZON_DAYS, threshold: float = LABEL_THRESHOLD, sell_threshold: float = LABEL_SELL_THRESHOLD) -> pd.DataFrame:
     """Per-ticker feature rows with date, target, and FEATURE_COLUMNS."""
     raw_df = normalize_ohlcv(raw_df)
     parts = []
@@ -143,7 +202,7 @@ def build_training_frame(raw_df: pd.DataFrame, horizon: int = LABEL_HORIZON_DAYS
     for _ticker, grp in groups:
         grp = grp.sort_values("date") if "date" in grp.columns else grp.reset_index(drop=True)
         grp = add_ml_features(grp)
-        grp = add_target(grp, horizon=horizon, threshold=threshold)
+        grp = add_target(grp, horizon=horizon, threshold=threshold, sell_threshold=sell_threshold)
         grp = grp.iloc[:-horizon]
         parts.append(grp)
 

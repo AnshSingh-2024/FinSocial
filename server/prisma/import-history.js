@@ -67,7 +67,7 @@ async function importHistory() {
   console.log(`Importing history for ${stocks.length} stocks...`);
 
   const period1 = new Date();
-  period1.setFullYear(period1.getFullYear() - 2);
+  period1.setFullYear(period1.getFullYear() - 10); // 10 years of OHLCV for regime diversity
   const period2 = new Date();
 
   let ok = 0;

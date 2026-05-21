@@ -19,3 +19,7 @@ npm test
 ## Charts
 
 Dashboard OHLC charts use [TradingView Lightweight Charts™](https://www.tradingview.com/lightweight-charts/). See [Acknowledgments](../README.md#acknowledgments--third-party-credits) in the root README.
+
+## App cache
+
+In-memory stale-while-revalidate cache (~3 minutes, `client/src/utils/appCache.js`) for **Home**, **Stocks**, **Portfolio**, **Forum**, **Tribe**, and **Hindsight**. Revisiting a page shows the last data immediately while refreshing in the background. Chart OHLC is shared per ticker across Home, Stocks, and Hindsight. Cache clears on logout.

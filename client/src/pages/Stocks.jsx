@@ -1,7 +1,20 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Bell } from 'lucide-react';
 import apiClient from '../api/client';
+import useStore from '../store';
+import {
+  invalidatePortfolioCache,
+  resolveCachedChart,
+  getStockDetailCache,
+  getStocksListCache,
+  isStockDetailFresh,
+  isStocksListFresh,
+  isWatchlistFresh,
+  setCachedChartForTicker,
+  setStockDetailCache,
+  setStocksListCache,
+} from '../utils/appCache';
 import MarketChart from '../components/MarketChart';
 import PriceAlertModal from '../components/PriceAlertModal';
 import ChartRangeSelector from '../components/ChartRangeSelector';
@@ -78,13 +91,19 @@ const TradeModal = ({ stock, onClose, onTraded }) => {
 };
 
 const Stocks = () => {
+  const user = useStore((s) => s.user);
   const [searchParams, setSearchParams] = useSearchParams();
   const ticker = searchParams.get('ticker');
+  const listCache = getStocksListCache();
   const [filter, setFilter] = useState('all');
-  const [watchlist, setWatchlist] = useState([]);
+  const [watchlist, setWatchlist] = useState(
+    isWatchlistFresh(user?.id) ? listCache.watchlist : [],
+  );
   const [searchQuery, setSearchQuery] = useState('');
-  const [stocksData, setStocksData] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [stocksData, setStocksData] = useState(
+    isStocksListFresh(user?.id) ? listCache.list : [],
+  );
+  const [loading, setLoading] = useState(!isStocksListFresh(user?.id));
   const [selectedStock, setSelectedStock] = useState(null);
   const [showTradeModal, setShowTradeModal] = useState(false);
   const [showPriceAlertModal, setShowPriceAlertModal] = useState(false);
@@ -98,43 +117,79 @@ const Stocks = () => {
   const [showVolume, setShowVolume] = useState(true);
 
   useEffect(() => {
-    // Load stocks
+    const silentList = isStocksListFresh(user?.id);
+    const silentWl = isWatchlistFresh(user?.id);
+    if (!silentList) setLoading(true);
+
     apiClient.get('/stocks').then((r) => {
-      setStocksData(r.data);
+      const list = Array.isArray(r.data) ? r.data : [];
+      setStocksData(list);
+      setStocksListCache({ list, userId: user?.id });
     }).catch(() => {}).finally(() => setLoading(false));
 
-    // Load server-side watchlist
     apiClient.get('/watchlist').then((r) => {
-      setWatchlist(r.data.map((s) => s.ticker));
+      const wl = r.data.map((s) => s.ticker);
+      setWatchlist(wl);
+      setStocksListCache({ watchlist: wl, userId: user?.id });
     }).catch(() => {
-      // Fallback to localStorage
-      const saved = localStorage.getItem('finsocial_watchlist');
-      if (saved) setWatchlist(JSON.parse(saved));
+      if (!silentWl) {
+        const saved = localStorage.getItem('finsocial_watchlist');
+        if (saved) setWatchlist(JSON.parse(saved));
+      }
     });
-  }, []);
+  }, [user?.id]);
 
-  // When ticker param changes, load detail
+  const detailFetchRef = useRef(null);
+
   useEffect(() => {
     if (!ticker) {
       setSelectedStock(null);
       return;
     }
-    setChartLoading(true);
+    const cached = getStockDetailCache(ticker);
+    const chartCached = resolveCachedChart(ticker);
+    if (cached?.detail) {
+      const detail = chartCached?.base?.length
+        ? { ...cached.detail, history: chartCached.base, historyInterval: chartCached.interval }
+        : cached.detail;
+      setSelectedStock(detail);
+      setChartLoading(false);
+    }
+    if (cached?.sentiment) setSentiment(cached.sentiment);
+    const silent = Boolean(cached?.detail) && isStockDetailFresh(ticker, user?.id);
+    if (!silent) setChartLoading(true);
+    if (detailFetchRef.current === ticker) return;
+    detailFetchRef.current = ticker;
+
     apiClient
-      .get(`/stocks/${encodeURIComponent(ticker)}`, { params: { range: '2y' } })
+      .get(`/stocks/${encodeURIComponent(ticker)}`, { params: { range: chartRange, skipQuote: '1' } })
       .then((r) => {
         setSelectedStock(r.data);
         setIntradayBars(null);
+        setCachedChartForTicker(ticker, {
+          base: r.data.history || [],
+          intraday: [],
+          interval: r.data.historyInterval || '1d',
+        });
+        setStockDetailCache(ticker, { detail: r.data, sentiment: cached?.sentiment });
       })
       .catch(() => {})
-      .finally(() => setChartLoading(false));
+      .finally(() => {
+        if (detailFetchRef.current === ticker) detailFetchRef.current = null;
+        setChartLoading(false);
+      });
 
     apiClient.get(`/stocks/${encodeURIComponent(ticker)}/sentiment`).then((r) => {
       setSentiment(r.data);
+      const prev = getStockDetailCache(ticker);
+      setStockDetailCache(ticker, { detail: prev?.detail, sentiment: r.data });
     }).catch(() => {
-      setSentiment({ bullish: 60, neutral: 25, bearish: 15, total: 0, userVote: null });
+      const fallback = { bullish: 60, neutral: 25, bearish: 15, total: 0, userVote: null };
+      setSentiment(fallback);
+      const prev = getStockDetailCache(ticker);
+      setStockDetailCache(ticker, { detail: prev?.detail, sentiment: fallback });
     });
-  }, [ticker]);
+  }, [ticker, user?.id]);
 
   useEffect(() => {
     if (!selectedStock?.id) {
@@ -147,32 +202,81 @@ const Stocks = () => {
       .catch(() => setStockAlerts([]));
   }, [selectedStock?.id]);
 
+  const intradayFetchRef = useRef(null);
+
   const fetchIntraday = useCallback((t, silent = false) => {
-    if (!silent) setChartLoading(true);
+    const chartCached = resolveCachedChart(t);
+    if (chartCached?.intraday?.length) {
+      setIntradayBars({ history: chartCached.intraday, interval: chartCached.interval || 'intraday' });
+    }
+    if (!silent && !(chartCached?.intraday?.length)) setChartLoading(true);
+    if (intradayFetchRef.current === t) return Promise.resolve();
+    intradayFetchRef.current = t;
     return apiClient
-      .get(`/stocks/${encodeURIComponent(t)}`, { params: { range: '1d' } })
-      .then((r) => setIntradayBars({ history: r.data.history || [], interval: r.data.historyInterval || 'intraday' }))
+      .get(`/stocks/${encodeURIComponent(t)}`, { params: { range: '1d', skipQuote: '1' } })
+      .then((r) => {
+        const bars = { history: r.data.history || [], interval: r.data.historyInterval || 'intraday' };
+        setIntradayBars(bars);
+        setCachedChartForTicker(t, {
+          base: chartCached?.base ?? [],
+          intraday: bars.history,
+          interval: bars.interval,
+        });
+      })
       .catch(() => setIntradayBars(null))
       .finally(() => {
+        if (intradayFetchRef.current === t) intradayFetchRef.current = null;
         if (!silent) setChartLoading(false);
       });
   }, []);
 
-  const refreshStockDetail = useCallback((silent = false) => {
+  const refreshStockDetail = useCallback((silent = false, range = chartRange) => {
     if (!ticker) return Promise.resolve();
     if (!silent) setChartLoading(true);
     return apiClient
-      .get(`/stocks/${encodeURIComponent(ticker)}`, { params: { range: '2y' } })
-      .then((r) => setSelectedStock(r.data))
+      .get(`/stocks/${encodeURIComponent(ticker)}`, { params: { range, skipQuote: '1' } })
+      .then((r) => {
+        setSelectedStock(r.data);
+        const prev = resolveCachedChart(ticker);
+        setCachedChartForTicker(ticker, {
+          base: r.data.history || [],
+          intraday: prev?.intraday ?? [],
+          interval: r.data.historyInterval || '1d',
+        });
+        const sentimentCached = getStockDetailCache(ticker)?.sentiment;
+        setStockDetailCache(ticker, { detail: r.data, sentiment: sentimentCached });
+      })
       .catch(() => {})
       .finally(() => {
         if (!silent) setChartLoading(false);
       });
   }, [ticker]);
 
+  // Re-fetch from server when switching to long ranges (5y/10y need more bars than cached 2y)
+  useEffect(() => {
+    if (!ticker || chartRange === '1d') return;
+    if (chartRange === '5y' || chartRange === '10y') {
+      setChartLoading(true);
+      apiClient
+        .get(`/stocks/${encodeURIComponent(ticker)}`, { params: { range: chartRange, skipQuote: '1' } })
+        .then((r) => {
+          setSelectedStock(r.data);
+          setCachedChartForTicker(ticker, {
+            base: r.data.history || [],
+            intraday: [],
+            interval: r.data.historyInterval || '1d',
+          });
+        })
+        .catch(() => {})
+        .finally(() => setChartLoading(false));
+    } else {
+      setIntradayBars(null);
+    }
+  }, [ticker, chartRange]);
+
   useEffect(() => {
     if (!ticker || chartRange !== '1d') {
-      setIntradayBars(null);
+      if (chartRange !== '5y' && chartRange !== '10y') setIntradayBars(null);
       return;
     }
     fetchIntraday(ticker);
@@ -225,7 +329,16 @@ const Stocks = () => {
     return (
       <div className="page stock-detail-view fade-in">
         {tradeToast && <div className="trade-toast">{tradeToast}</div>}
-        {showTradeModal && <TradeModal stock={s} onClose={() => setShowTradeModal(false)} onTraded={(side, qty) => showToast(`✓ ${side} ${qty} shares of ${s.displayTicker}`)} />}
+        {showTradeModal && (
+          <TradeModal
+            stock={s}
+            onClose={() => setShowTradeModal(false)}
+            onTraded={(side, qty) => {
+              invalidatePortfolioCache();
+              showToast(`✓ ${side} ${qty} shares of ${s.displayTicker}`);
+            }}
+          />
+        )}
         {showPriceAlertModal && (
           <PriceAlertModal
             stock={s}
@@ -356,7 +469,22 @@ const Stocks = () => {
                 </span>
               </div>
               <div className="conf-bar" style={{ marginBottom: '8px' }}>
-                <div className="conf-bar-fill" style={{ width: `${sig.confidence}%` }} />
+                {(sig.buyProb != null && sig.sellProb != null) ? (
+                  <>
+                    <div style={{ display: 'flex', gap: '2px', height: '6px', borderRadius: '3px', overflow: 'hidden' }}>
+                      <div style={{ width: `${Math.round(sig.sellProb * 100)}%`, background: 'var(--red)', borderRadius: '3px 0 0 3px' }} />
+                      <div style={{ width: `${Math.round(sig.holdProb * 100)}%`, background: 'var(--text3)' }} />
+                      <div style={{ width: `${Math.round(sig.buyProb * 100)}%`, background: 'var(--green)', borderRadius: '0 3px 3px 0' }} />
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '.7rem', color: 'var(--text3)', marginTop: '4px' }}>
+                      <span className="negative">SELL {Math.round(sig.sellProb * 100)}%</span>
+                      <span>HOLD {Math.round(sig.holdProb * 100)}%</span>
+                      <span className="positive">BUY {Math.round(sig.buyProb * 100)}%</span>
+                    </div>
+                  </>
+                ) : (
+                  <div className="conf-bar-fill" style={{ width: `${sig.confidence}%` }} />
+                )}
               </div>
               <p style={{ fontSize: '.85rem', color: 'var(--text2)', lineHeight: 1.6 }}>{sig.reasoning}</p>
               {sig.rsi && (
@@ -440,8 +568,37 @@ const Stocks = () => {
                       <td><span className="badge badge-gray">{s.sector || 'Unknown'}</span></td>
                       <td>
                         {sig ? (
-                          <span className={`badge ${sig.verdict === 'BUY' ? 'badge-green' : sig.verdict === 'SELL' ? 'badge-red' : 'badge-gray'}`}>
-                            {sig.verdict} {sig.confidence}%
+                          <span className="sig-tip-wrap">
+                            <span className={`badge ${sig.verdict === 'BUY' ? 'badge-green' : sig.verdict === 'SELL' ? 'badge-red' : 'badge-gray'}`}>
+                              {sig.verdict} {sig.confidence}%
+                            </span>
+                            {(sig.buyProb != null && sig.sellProb != null) && (
+                              <div className="sig-tip">
+                                <div className="sig-tip-title">5-day probability</div>
+                                <div className="sig-tip-row">
+                                  <span className="sig-tip-label positive">BUY</span>
+                                  <div className="sig-tip-bar-track">
+                                    <div className="sig-tip-bar-fill" style={{ width: `${Math.round(sig.buyProb * 100)}%`, background: 'var(--green)' }} />
+                                  </div>
+                                  <span className="sig-tip-pct">{Math.round(sig.buyProb * 100)}%</span>
+                                </div>
+                                <div className="sig-tip-row">
+                                  <span className="sig-tip-label" style={{ color: 'var(--text3)' }}>HLD</span>
+                                  <div className="sig-tip-bar-track">
+                                    <div className="sig-tip-bar-fill" style={{ width: `${Math.round(sig.holdProb * 100)}%`, background: 'var(--text3)' }} />
+                                  </div>
+                                  <span className="sig-tip-pct">{Math.round(sig.holdProb * 100)}%</span>
+                                </div>
+                                <div className="sig-tip-row">
+                                  <span className="sig-tip-label negative">SEL</span>
+                                  <div className="sig-tip-bar-track">
+                                    <div className="sig-tip-bar-fill" style={{ width: `${Math.round(sig.sellProb * 100)}%`, background: 'var(--red)' }} />
+                                  </div>
+                                  <span className="sig-tip-pct">{Math.round(sig.sellProb * 100)}%</span>
+                                </div>
+                                <div className="sig-tip-footer">{sig.source === 'xgboost' ? '🤖 ML · 5-day forward' : '📊 Heuristic'}</div>
+                              </div>
+                            )}
                           </span>
                         ) : (
                           <span className={`badge ${pl ? 'badge-green' : 'badge-red'}`}>{pl ? 'BUY' : 'SELL'}</span>

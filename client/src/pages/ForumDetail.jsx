@@ -2,24 +2,35 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import apiClient from '../api/client';
 import useStore from '../store';
+import {
+  getForumDetailCache,
+  isForumDetailFresh,
+  setForumDetailCache,
+} from '../utils/appCache';
 import { APP_BASE } from '../constants/routes';
 
 const ForumDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const user = useStore((s) => s.user);
-  const [question, setQuestion] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const cached = getForumDetailCache(id);
+  const [question, setQuestion] = useState(
+    isForumDetailFresh(id, user?.id) ? cached?.question ?? null : null,
+  );
+  const [loading, setLoading] = useState(!isForumDetailFresh(id, user?.id));
   const [answerBody, setAnswerBody] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [aiSuggestion, setAiSuggestion] = useState('');
   const [loadingAi, setLoadingAi] = useState(false);
 
   useEffect(() => {
+    const silent = isForumDetailFresh(id, user?.id);
+    if (!silent) setLoading(true);
     apiClient.get(`/forum/${id}`).then((r) => {
       setQuestion(r.data);
+      setForumDetailCache(id, r.data);
     }).finally(() => setLoading(false));
-  }, [id]);
+  }, [id, user?.id]);
 
   const handleVoteQ = async (direction) => {
     try {

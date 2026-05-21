@@ -1,20 +1,24 @@
 /** ~Trading-day bar limits (must match server TRADING_DAY_TAKE). */
 export const RANGE_BAR_LIMITS = {
-  '1d': 1,
-  '1w': 7,
-  '1m': 22,
-  '3m': 66,
-  '1y': 252,
-  '2y': 560,
+  '1d':  1,
+  '1w':  7,
+  '1m':  22,
+  '3m':  66,
+  '1y':  252,
+  '2y':  560,
+  '5y':  1260,
+  '10y': 2520,
 };
 
 const RANGE_LOOKBACK_DAYS = {
-  '1d': 2,
-  '1w': 10,
-  '1m': 35,
-  '3m': 100,
-  '1y': 380,
-  '2y': 760,
+  '1d':  2,
+  '1w':  10,
+  '1m':  35,
+  '3m':  100,
+  '1y':  380,
+  '2y':  760,
+  '5y':  1900,
+  '10y': 3800,
 };
 
 const IST = 'Asia/Kolkata';

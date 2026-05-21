@@ -29,6 +29,8 @@ async function refreshAllSignals() {
         { timeout: PREDICT_TIMEOUT_MS }
       );
 
+      await prisma.signal.deleteMany({ where: { stockId: stock.id } });
+
       const signal = await prisma.signal.create({
         data: {
           stockId: stock.id,
@@ -37,20 +39,13 @@ async function refreshAllSignals() {
           reasoning: data.reasoning || '',
           rsi: data.technicals?.rsi || null,
           macd: data.technicals?.macd || null,
+          buyProb: data.buy_prob != null ? data.buy_prob : null,
+          holdProb: data.hold_prob != null ? data.hold_prob : null,
+          sellProb: data.sell_prob != null ? data.sell_prob : null,
           source: data.model_used ? 'xgboost' : 'heuristic',
         },
         include: { stock: { select: { ticker: true, displayTicker: true } } },
       });
-
-      if (global.io) {
-        global.io.emit('signal:new', {
-          id: signal.id,
-          ticker: signal.stock.displayTicker,
-          verdict: signal.verdict,
-          confidence: signal.confidence,
-          reasoning: signal.reasoning,
-        });
-      }
 
       if (data.confidence >= 70 && (data.verdict === 'BUY' || data.verdict === 'SELL')) {
         try {
@@ -67,7 +62,9 @@ async function refreshAllSignals() {
                 body: `ML model signals ${data.verdict} with ${data.confidence}% confidence. ${data.reasoning || ''}`.trim(),
               },
             });
-            notificationQueue.add({ notificationId: notification.id });
+            notificationQueue.add({ notificationId: notification.id }).catch((err) => {
+              logger.warn('[Signals] Notification queue unavailable', { error: err.message });
+            });
           }
         } catch (notifErr) {
           logger.warn('[Signals] Watchlist notification failed', { error: notifErr.message });
@@ -81,6 +78,10 @@ async function refreshAllSignals() {
       failed += 1;
       logger.warn('[Signals] Predict failed', { ticker: stock.ticker, error: err.message });
     }
+  }
+
+  if (global.io) {
+    global.io.emit('signals:refreshed', { updated, failed, total: stocks.length });
   }
 
   return { success: true, count: stocks.length, updated, failed };

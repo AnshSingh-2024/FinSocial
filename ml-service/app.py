@@ -217,10 +217,36 @@ def compute_signal(ticker: str, *, require_model: bool = False) -> dict:
     if model is not None and feat_row is not None:
         cols = model_bundle.get("feature_columns", FEATURE_COLUMNS) if model_bundle else FEATURE_COLUMNS
         features = pd.DataFrame([feat_row[cols].astype(float)])
-        buy_prob = float(model.predict_proba(features)[0][1])
-        raw_confidence = buy_prob if buy_prob > 0.5 else (1.0 - buy_prob)
-        confidence = int(max(50, min(95, raw_confidence * 100)))
-        verdict = "BUY" if buy_prob > 0.55 else ("SELL" if buy_prob < 0.45 else "HOLD")
+        probs = model.predict_proba(features)[0]
+        num_class = model_bundle.get("num_class", 2) if model_bundle else 2
+
+        if num_class == 3:
+            # 3-class: index 0=SELL, 1=HOLD, 2=BUY
+            sell_prob = float(probs[0])
+            hold_prob = float(probs[1])
+            buy_prob  = float(probs[2])
+            # Small BUY bias for platform UX — nudges borderline decisions toward BUY.
+            # Tunable via ML_BUY_BIAS env var. buy_prob in response stays unbiased.
+            buy_bias  = float(os.environ.get("ML_BUY_BIAS", "0.04"))
+            biased    = np.array([sell_prob, hold_prob, buy_prob + buy_bias])
+            pred_idx  = int(np.argmax(biased))
+            verdict   = ["SELL", "HOLD", "BUY"][pred_idx]
+            pred_prob = float(probs[pred_idx])  # unbiased prob for confidence
+            # Confidence: 50 at random (1/3) → 95 at certain (1.0)
+            confidence = int(50 + min(45, (pred_prob - 1/3) / (2/3) * 45))
+            # If bias pushed a BUY verdict but model confidence is sub-random, show HOLD
+            if verdict == "BUY" and confidence < 50:
+                verdict = "HOLD"
+        else:
+            # Legacy binary model fallback
+            buy_prob = float(probs[1])
+            verdict = "BUY" if buy_prob > 0.52 else ("SELL" if buy_prob < 0.42 else "HOLD")
+            if verdict == "BUY":
+                confidence = int(50 + min(45, (buy_prob - 0.52) / 0.48 * 45))
+            elif verdict == "SELL":
+                confidence = int(50 + min(45, (0.42 - buy_prob) / 0.42 * 45))
+            else:
+                confidence = int(round(buy_prob * 100))
         model_used = True
     else:
         if model is not None and feat_row is None:
@@ -233,7 +259,7 @@ def compute_signal(ticker: str, *, require_model: bool = False) -> dict:
         close = float(latest["close"])
         sma50 = float(latest["sma_50"])
         score = 0
-        if rsi < 40:
+        if rsi < 30:  # standard oversold threshold (was 40 — too aggressive)
             score += 1
         elif rsi > 70:
             score -= 1
@@ -269,6 +295,8 @@ def compute_signal(ticker: str, *, require_model: bool = False) -> dict:
         "verdict": verdict,
         "confidence": confidence,
         "buy_prob": round(buy_prob, 4),
+        "sell_prob": round(sell_prob, 4) if "sell_prob" in dir() and model_used and (model_bundle or {}).get("num_class") == 3 else None,
+        "hold_prob": round(hold_prob, 4) if "hold_prob" in dir() and model_used and (model_bundle or {}).get("num_class") == 3 else None,
         "model_used": model_used,
         "reasoning": ". ".join(reasoning_parts) + ".",
         "technicals": tech,

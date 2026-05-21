@@ -181,6 +181,17 @@ table.data-table{width:100%;border-collapse:collapse;font-size:.85rem}
 .signal-verdict{font-size:1.4rem;font-weight:800}
 .conf-bar{height:6px;background:var(--bg3);border-radius:3px;overflow:hidden;margin-top:4px}
 .conf-bar-fill{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--blue),var(--green))}
+/* Signal probability tooltip */
+.sig-tip-wrap{position:relative;display:inline-flex}
+.sig-tip{position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);width:204px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:12px;box-shadow:0 8px 24px rgba(0,0,0,.12);opacity:0;pointer-events:none;transition:opacity .15s;z-index:50}
+.sig-tip-wrap:hover .sig-tip{opacity:1}
+.sig-tip-title{font-size:.68rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px}
+.sig-tip-row{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+.sig-tip-label{font-size:.72rem;font-weight:700;width:30px;flex-shrink:0}
+.sig-tip-bar-track{flex:1;height:5px;background:var(--bg3);border-radius:3px;overflow:hidden}
+.sig-tip-bar-fill{height:100%;border-radius:3px}
+.sig-tip-pct{font-size:.72rem;font-weight:600;width:28px;text-align:right;flex-shrink:0;color:var(--text2)}
+.sig-tip-footer{font-size:.68rem;color:var(--text3);margin-top:8px;padding-top:8px;border-top:1px solid var(--border)}
 .feed-item{display:flex;align-items:center;gap:12px;padding:12px;border-bottom:1px solid var(--border)}
 .feed-item:last-child{border-bottom:none}
 .feed-av{width:32px;height:32px;border-radius:50%;border:2px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-weight:700;font-size:.68rem;background:var(--accent);color:#fff}
